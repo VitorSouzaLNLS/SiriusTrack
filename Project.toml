@@ -1,0 +1,8 @@
+name = "SiriusTrack"
+uuid = "ffde128b-e4c5-427d-b8ef-99778a66d362"
+authors = ["Vitor <vitor.souza@lnls.br>"]
+version = "0.1.0"
+
+[deps]
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
