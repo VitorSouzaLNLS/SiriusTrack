@@ -1,11 +1,14 @@
 
 
-export track_linepass!, element_pass
+export element_pass, line_pass, ring_pass
 
 using ..AcceleratorModule: Accelerator
+using ..Auxiliary: no_plane, plane_x, plane_xy, plane_y, pm_bnd_mpole_symplectic4_pass,
+    pm_cavity_pass, pm_corrector_pass, pm_drift_pass, pm_identity_pass,
+    pm_str_mpole_symplectic4_pass, st_particle_lost, st_success, vchamber_ellipse,
+    vchamber_rectangle, vchamber_rhombus
 using ..Elements: Element
 using ..PosModule: Pos
-using ..Auxiliary: vchamber_rectangle, vchamber_rhombus, vchamber_ellipse, st_success, no_plane, plane_x, plane_y, plane_xy
 
 
 function element_pass(
@@ -37,7 +40,7 @@ function element_pass(
         status = pm_cavity_pass!(particle, element, accelerator, turn_number)
 
     else
-        return passmethod_not_defined
+        return st_passmethod_not_defined
     end
 
     return particle, status
@@ -84,28 +87,28 @@ function line_pass(
         # Checks if particle is lost
         if !isfinite(rx)
             lost_plane = plane_x
-            status = particle_lost
+            status = st_particle_lost
         end
 
         if !isfinite(ry)
-            if status != particle_lost
+            if status != st_particle_lost
                 lost_plane = plane_y
-                status = particle_lost
+                status = st_particle_lost
             else
                 lost_plane = plane_xy
             end
         end
 
-        if (status != particle_lost) && (accelerator.vchamber_on == on)
+        if (status != st_particle_lost) && (accelerator.vchamber_state == on)
             if element.properties[:vchamber] == vchamber_rectangle
                 if rx <= element.properties[:hmin] || rx >= element.properties[:hmax]
                     lost_plane = plane_x
-                    status = particle_lost
+                    status = st_particle_lost
                 end
                 if ry <= element.properties[:vmin] || ry >= element.properties[:vmax]
-                    if status != particle_lost
+                    if status != st_particle_lost
                         lost_plane = plane_y
-                        status = particle_lost
+                        status = st_particle_lost
                     else
                         lost_plane = plane_xy
                     end
@@ -169,11 +172,11 @@ function ring_pass(accelerator::Accelerator,
     if turn_by_turn
         v = Pos{Float64}[]
     end
-    p_in = copy(particle)
+    tracked = copy(particle)
     lostplane = no_plane
     st = st_success
     for turn in 1:1:nr_turns
-        tracked, st, lostplane = line_pass(accelerator, p_in, [leng], element_offset=element_offset, turn_number=turn-1)
+        tracked, st, lostplane = line_pass(accelerator, tracked, [length(accelerator.lattice)], element_offset=element_offset, turn_number=turn-1)
         if st == st_success
             if turn_by_turn
                 push!(v, copy(tracked[1]))
@@ -182,10 +185,10 @@ function ring_pass(accelerator::Accelerator,
             append!(v, [Pos(NaN64, NaN64, NaN64, NaN64, NaN64, NaN64) for i in 1:1:(nr_turns-turn+1)])
             break
         end
-        p_in = tracked[1]
+        tracked = tracked[1]
     end
     if !turn_by_turn && st == st_success
-        v = [copy(tracked[1])]
+        v = [copy(tracked)]
         lostplane = no_plane
     end
     return v, st, lostplane
@@ -208,7 +211,7 @@ function aux_check_lost_pos(element::Element, rx::Float64, ry::Float64)
     end
 
     if amplitude > 1
-        return particle_lost, plane_xy
+        return st_particle_lost, plane_xy
     else
         return st_success, no_plane
     end

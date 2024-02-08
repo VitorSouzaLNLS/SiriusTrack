@@ -1,16 +1,12 @@
 
-export pm_drift_pass!, pm_str_mpole_symplectic4_pass!, pm_bnd_mpole_symplectic4_pass!, pm_corrector_pass!, pm_cavity_pass!
-
 import Base: !=, getproperty, setfield!, setproperty!
 
 using ..AcceleratorModule: Accelerator
-using ..Auxiliary: no_plane, off, on, particle_lost, plane_x, plane_xy, plane_y, plane_z,
-    pm_bnd_mpole_symplectic4_pass, pm_cavity_pass, pm_corrector_pass, pm_drift_pass,
-    pm_identity_pass, pm_str_mpole_symplectic4_pass, radiation_damping, radiation_full,
-    radiation_off, st_success
+using ..Auxiliary: full, no_plane, off, on, pm_bnd_mpole_symplectic4_pass, pm_cavity_pass,
+    pm_corrector_pass, pm_drift_pass, pm_identity_pass, pm_str_mpole_symplectic4_pass,
+    st_success
 using ..Elements: Element
 using ..PosModule: Pos
-using ..Constants: light_speed
 
 const DRIFT1::Float64  =  0.6756035959798286638e00
 const DRIFT2::Float64  = -0.1756035959798286639e00
@@ -24,7 +20,7 @@ const LAMBDABAR::Float64 = 3.86159323e-13 # Compton wavelength/2pi [m]
 const CER::Float64 = 2.81794092e-15       # Classical electron radius [m]
 const CU::Float64 = 1.323094366892892     # 55/(24*sqrt(3)) factor
 
-function _drift(pos::Pos{T}, length::T) where T
+function _drift(pos::Pos{Float64}, length::Float64) 
     pnorm::Float64 = 1 / (1 + pos.de)
     norml::Float64 = length * pnorm
     pos.rx += norml * pos.px
@@ -32,14 +28,14 @@ function _drift(pos::Pos{T}, length::T) where T
     pos.dl += 0.5 * norml * pnorm * (pos.px*pos.px + pos.py*pos.py)
 end
 
-# function _drift_fast(pos::Pos{T}, norml::T) where T
+# function _drift_fast(pos::Pos{Float64}, norml::Float64) 
 #     pos.rx += norml * pos.px
 #     pos.ry += norml * pos.py
 #     pos.dl += 0.5 * norml * (pos.px^2 + pos.py^2) / (1 + pos.de)
 # end
 
-function _calcpolykick(pos::Pos{T}, polynom_a::Vector{Float64},
-    polynom_b::Vector{Float64}) where T
+function _calcpolykick(pos::Pos{Float64}, polynom_a::Vector{Float64},
+    polynom_b::Vector{Float64}) 
     n = min(length(polynom_b), length(polynom_a))
     if n == 0
         real_sum = 0.0
@@ -56,7 +52,7 @@ function _calcpolykick(pos::Pos{T}, polynom_a::Vector{Float64},
     return real_sum, imag_sum
 end
 
-function _b2_perp(bx::T, by::T, px::T, py::T, curv::T=1.0) where T
+function _b2_perp(bx::Float64, by::Float64, px::Float64, py::Float64, curv::Float64=1.0) 
     curv2 = curv^2
     v_norm2_inv = curv2 + px^2 + py^2
     b2p = by^2 + bx^2
@@ -66,8 +62,8 @@ function _b2_perp(bx::T, by::T, px::T, py::T, curv::T=1.0) where T
     return b2p
 end
 
-function _strthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
-    polynom_b::Vector{Float64}, rad_const::Float64=0.0, qexcit_const::Float64=0.0) where T
+function _strthinkick(pos::Pos{Float64}, length::Float64, polynom_a::Vector{Float64},
+    polynom_b::Vector{Float64}, rad_const::Float64=0.0, qexcit_const::Float64=0.0) 
 
     real_sum, imag_sum = _calcpolykick(pos, polynom_a, polynom_b)
 
@@ -94,8 +90,8 @@ function _strthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
     pos.py += length * imag_sum
 end
 
-function _bndthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
-    polynom_b::Vector{Float64}, irho::Float64, rad_const::Float64=0.0, qexcit_const::Float64=0.0) where T
+function _bndthinkick(pos::Pos{Float64}, length::Float64, polynom_a::Vector{Float64},
+    polynom_b::Vector{Float64}, irho::Float64, rad_const::Float64=0.0, qexcit_const::Float64=0.0) 
     
     real_sum, imag_sum = _calcpolykick(pos, polynom_a, polynom_b)
     de = copy(pos.de)
@@ -125,8 +121,8 @@ function _bndthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
     pos.dl += length * irho * pos.rx
 end
 
-function _edge_fringe(pos::Pos{T}, inv_rho::Float64, edge_angle::Float64,
-    fint::Float64, gap::Float64) where T
+function _edge_fringe(pos::Pos{Float64}, inv_rho::Float64, edge_angle::Float64,
+    fint::Float64, gap::Float64) 
     rx::Float64 = pos.rx
     ry::Float64 = pos.px
     de::Float64 = pos.de
@@ -141,7 +137,7 @@ function _edge_fringe(pos::Pos{T}, inv_rho::Float64, edge_angle::Float64,
     pos.py -= ry * fy
 end
 
-# function _translate_pos(pos::Pos{T}, t::Vector{Float64}) where T
+# function _translate_pos(pos::Pos{Float64}, t::Vector{Float64}) 
 #     pos.rx += t[1]
 #     pos.px += t[2]
 #     pos.ry += t[3]
@@ -150,7 +146,7 @@ end
 #     pos.dl += t[6]
 # end
 
-# function _rotate_pos(pos::Pos{T}, R::Vector{Float64}) where T
+# function _rotate_pos(pos::Pos{Float64}, R::Vector{Float64}) 
 #     rx0, px0 = pos.rx, pos.px
 #     ry0, py0 = pos.ry, pos.py
 #     de0, dl0 = pos.de, pos.dl
@@ -163,16 +159,16 @@ end
 #     pos.dl = R[5*6 + 1]*rx0 + R[5*6 + 2]*px0 + R[5*6 + 3]*ry0 + R[5*6 + 4]*py0 + R[5*6 + 5]*de0 + R[5*6 + 6]*dl0
 # end
 
-function pm_identity_pass!(pos::Pos{T}, element::Element) where T
+function pm_identity_pass!(pos::Pos{Float64}, element::Element) 
     return st_success
 end
 
-function pm_drift_pass!(pos::Pos{T}, element::Element) where T
+function pm_drift_pass!(pos::Pos{Float64}, element::Element) 
     _drift(pos, element.properties[:length])
     return st_success
 end
 
-function pm_str_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator::Accelerator) where T
+function pm_str_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelerator) 
     # global_2_local(pos, elem)
     # steps = haskey(elem.properties, :nr_steps) ? elem.properties[:nr_steps] : 20
     steps = elem.properties[:nr_steps]
@@ -188,11 +184,11 @@ function pm_str_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator:
     rad_const = 0.0
     qexcit_const = 0.0
 
-    if accelerator.radiation_state == radiation_damping
+    if accelerator.radiation_state == on
         rad_const = CGAMMA * (accelerator.energy/1e9)^3 / TWOPI
     end
 
-    if accelerator.radiation_state == radiation_full
+    if accelerator.radiation_state == full
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
@@ -210,7 +206,7 @@ function pm_str_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator:
     return st_success
 end
 
-function pm_bnd_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator::Accelerator) where T
+function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelerator) 
     # if !haskey(elem.properties, :angle)
     #     return pm_str_mpole_symplectic4_pass!(pos, elem, accelerator)
     # end
@@ -231,11 +227,11 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator:
     rad_const = 0.0
     qexcit_const = 0.0
 
-    if accelerator.radiation_state == radiation_damping
+    if accelerator.radiation_state == on
         rad_const = CGAMMA * (accelerator.energy / 1e9)^3 / (TWOPI)
     end
 
-    if accelerator.radiation_state == radiation_full
+    if accelerator.radiation_state == full
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
@@ -265,7 +261,7 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator:
     return st_success
 end
 
-function pm_corrector_pass!(pos::Pos{T}, elem::Element) where T
+function pm_corrector_pass!(pos::Pos{Float64}, elem::Element) 
     #global_2_local(pos, elem)
     xkick = elem.properties[:hkick]
     ykick = elem.properties[:vkick]
@@ -290,7 +286,7 @@ function pm_corrector_pass!(pos::Pos{T}, elem::Element) where T
     return st_success
 end
 
-function pm_cavity_pass!(pos::Pos{T}, elem::Element, accelerator::Accelerator, turn_number::Int) where T
+function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelerator, turn_number::Int) 
     if accelerator.cavity_state == off
         return pm_drift_pass!(pos, elem)
     end
@@ -300,15 +296,15 @@ function pm_cavity_pass!(pos::Pos{T}, elem::Element, accelerator::Accelerator, t
     philag = elem.properties[:phase_lag]
     frf = elem.properties[:frequency]
     harmonic_number = accelerator.harmonic_number
-    velocity = light_speed
-    #velocity = accelerator.velocity
+    velocity = accelerator.velocity
+    #velocity = light_speed
     L0 = accelerator.length
     T0 = L0 / velocity
 
     if elem.properties[:length] == 0
         de, dl = pos.de, pos.dl
-        #pos.de += -nv * sin(TWOPI * frf * (dl/velocity - (harmonic_number/frf - T0)*turn_number) - philag)
-        pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
+        pos.de += -nv * sin(TWOPI * frf * (dl/velocity - (harmonic_number/frf - T0)*turn_number) - philag)
+        #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
     else
         rx, px = pos.rx, pos.px
         ry, py = pos.ry, pos.py
@@ -322,8 +318,8 @@ function pm_cavity_pass!(pos::Pos{T}, elem::Element, accelerator::Accelerator, t
         pos.dl += 0.5 * norml * pnorm * (px*px + py*py)
 
         # Longitudinal momentum kick
-        #pos.de += -nv * sin(TWOPI * frf * (dl/velocity - (harmonic_number/frf - T0)*turn_number) - philag)
-        pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
+        pos.de += -nv * sin(TWOPI * frf * (dl/velocity - (harmonic_number/frf - T0)*turn_number) - philag)
+        #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
 
         # Drift half length
         pnorm = 1.0 / (1.0 + de)

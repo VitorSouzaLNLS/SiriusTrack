@@ -4,9 +4,9 @@ module StorageRing
 
     include("model.jl")
 
-    export create_accelerator
-
     function create_accelerator(;optics_mode::String=default_optics_mode, simplified::Bool=false, ids=[])
         return create_lattice(optics_mode, simplified, ids)
     end
+    
+    export create_accelerator
 end

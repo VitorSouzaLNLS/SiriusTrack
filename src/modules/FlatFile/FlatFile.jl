@@ -1,15 +1,11 @@
-export read_flatfile!, write_flatfile!
 
 using ..Auxiliary
 using ..Elements: Element!, Element
-using ..AcceleratorModule: Accelerator, Accelerator!, print_accelerator
-using ..Base:TTY
+using ..AcceleratorModule: Accelerator, Accelerator!
 
-function write_flatfile!() end
+function write_flatfile() end
 
-
-"""bbb."""
-function read_flatfile!(file_path::AbstractString)
+function read_flatfile(file_path::AbstractString)
     # Open the file
     file = open(file_path, "r")
     
@@ -115,6 +111,9 @@ function read_flatfile!(file_path::AbstractString)
             elseif contains(line, "frequency")
                 value = parse(Float64, split(line)[end])
                 current_element.properties[:frequency] = value
+            elseif contains(line, "phase_lag")
+                value = parse(Float64, split(line)[end])
+                current_element.properties[:phase_lag] = value
             elseif startswith(line, "pass_method")
                 # Parse and map pass_method to the corresponding enum
                 pass_method_str = String(strip(split(line)[end]))
@@ -142,12 +141,13 @@ function read_flatfile!(file_path::AbstractString)
     
     # Create and return the Accelerator object
     acc = Accelerator!(Float64(energy))
-    acc.cavity_state = Auxiliary.BoolState(Int(cavity_on))
-    acc.radiation_state = Auxiliary.RadiationState(Int(radiation_on))
-    acc.vchamber_on = Auxiliary.BoolState(Int(vchamber_on))
-    setfield!(acc, :lattice_version, String(lattice_version))
-    acc.harmonic_number = Int(harmonic_number)
     acc.lattice = lattice
+    setfield!(acc, :lattice_version, String(lattice_version))
+    acc.cavity_state = Auxiliary.BoolState(Int(cavity_on))
+    acc.radiation_state = Auxiliary.BoolState(Int(radiation_on))
+    acc.vchamber_state = Auxiliary.BoolState(Int(vchamber_on))
+    acc.harmonic_number = Int(harmonic_number)
+    
     return acc
 end
 

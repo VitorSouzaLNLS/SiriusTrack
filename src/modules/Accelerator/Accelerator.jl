@@ -1,6 +1,7 @@
 # Accelerator.jl
 
-import Base: !=, setproperty!, setfield!, getproperty
+import Base: !=, setproperty!, setfield!, getproperty, show
+using Printf
 using ..Auxiliary
 using ..Constants
 using ..Elements: Element
@@ -12,8 +13,8 @@ electron_rest_energy_eV = Constants.electron_rest_energy_eV
 mutable struct Accelerator
     energy::Float64
     cavity_state::Auxiliary.BoolState
-    radiation_state::Auxiliary.RadiationState
-    vchamber_on::Auxiliary.BoolState
+    radiation_state::Auxiliary.BoolState
+    vchamber_state::Auxiliary.BoolState
     harmonic_number::Int
     lattice::Vector{Element}
     lattice_version::String
@@ -27,7 +28,7 @@ function Accelerator!(energy::Real)
     gamma = energy/electron_rest_energy_eV
     beta = sqrt(1 - (1 / gamma^2))
     velocity = beta * light_speed
-    accelerator = Accelerator(energy, Auxiliary.off, Auxiliary.radiation_off, Auxiliary.off, 0, Element[], "", 0.0, velocity, beta, gamma)
+    accelerator = Accelerator(energy, Auxiliary.off, Auxiliary.off, Auxiliary.off, 0, Element[], "", 0.0, velocity, beta, gamma)
     return accelerator
 end
 
@@ -35,7 +36,7 @@ function isequal(acc1::Accelerator, acc2::Accelerator)
     if (acc1.energy != acc2.energy) return false end
     if (acc1.cavity_state != acc2.cavity_state) return false end
     if (acc1.radiation_state != acc2.radiation_state) return false end
-    if (acc1.vchamber_on != acc2.vchamber_on) return false end
+    if (acc1.vchamber_state != acc2.vchamber_state) return false end
     if (acc1.harmonic_number != acc2.harmonic_number) return false end
     if (acc1.lattice_version != acc2.lattice_version) return false end
     #if (acc1.lattice != acc2.lattice) return false end revisar comparador de lattices
@@ -47,7 +48,7 @@ function Base.:(!=)(acc1::Accelerator, acc2::Accelerator)
 end
 
 function update_cavity(accelerator::Accelerator)
-    cavity_indices = find_cavity(accelerator)
+    cavity_indices = find_cavities(accelerator)
     for index in cavity_indices
         cav = accelerator.lattice[index]
         if accelerator.cavity_state == on
@@ -79,26 +80,30 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
     
     elseif symbol == :cavity_state
         # Custom logic for setting the cavity_state field
-        if value == true
-            setfield!(accelerator, :cavity_state, on)
-        elseif value == false
-            setfield!(accelerator, :cavity_state, off)
-        elseif value == Auxiliary.on || value == Auxiliary.off
-            setfield!(accelerator, :cavity_state, value)
-        else
-            throw(ArgumentError("Invalid argument for $symbol"))
-        update_cavity(accelerator)
+        if isa(value, Auxiliary.BoolState) || isa(value, Int) || isa(value, Bool)
+            val = Int(value)
+            if 0 <= val <= 1
+                setfield!(accelerator, :cavity_state, Auxiliary.BoolState(val))
+                update_cavity(accelerator)
+            else
+                error("cavity_state should be 0(cavity off) or 1(cavity on)")
+            end
         end
     
     elseif symbol == :radiation_state
         # Custom logic for setting the radiation_on field
-        if isa(value, Auxiliary.RadiationState) || isa(value, Int) || isa(value, Bool)
-            setfield!(accelerator, :radiation_state, Auxiliary.RadiationState(Int(value)))
+        if isa(value, Auxiliary.BoolState) || isa(value, Int) || isa(value, Bool)
+            val = Int(value)
+            if 0 <= val <= 2
+                setfield!(accelerator, :radiation_state, Auxiliary.BoolState(val))
+            else
+                error("radiation_state should be 0(radiation off), 1(radiation dumping) or 2(radiation full)")
+            end
         end
     
-    elseif symbol == :vchamber_on
-        # Custom logic for setting the vchamber_on field
-        setfield!(accelerator, :vchamber_on, value)
+    elseif symbol == :vchamber_state
+        # Custom logic for setting the vchamber_state field
+        setfield!(accelerator, :vchamber_state, value)
     
     elseif symbol == :harmonic_number
         # Custom logic for setting the harmonic_number field
@@ -197,6 +202,16 @@ function find_indices(accelerator::Accelerator, property::String, value::Union{R
     return indices
 end
 
+function find_cavities(accelerator::Accelerator)
+    idcs = Int[]
+    for i in 1:1:length(accelerator.lattice) 
+        if haskey(accelerator.lattice[i].properties, :frequency)
+            push!(idcs, i)
+        end
+    end
+    return idcs
+end
+
 function lattice_shift!(accelerator::Accelerator, index::Int)
     lattice::Vector{Element} = accelerator.lattice
     
@@ -211,5 +226,21 @@ function lattice_shift!(accelerator::Accelerator, index::Int)
     accelerator.lattice = new_lattice
 end
 
-# precompile(find_indices, (String, Union{Real, String, Auxiliary.PassMethod}, ))
-# precompile(Accelerator!, (Real, ))
+function Base.show(io::IO, ::MIME"text/plain", acc::Accelerator)
+    println(io, "---------- Accelerator ----------:")
+    println(io, "\tEnergy: ", acc.energy)
+    println(io, "\tCavity State: ", acc.cavity_state)
+    println(io, "\tRadiation State: ", acc.radiation_state)
+    println(io, "\tVchamber State: ", acc.vchamber_state)
+    println(io, "\tHarmonic Number: ", acc.harmonic_number)
+    println(io, "\tLength: ", acc.length)
+    @printf(io, "\tVelocity: %.8f [m/s]\n", accelerator.velocity)
+    @printf(io, "\tBeta Factor: %.16f \n", accelerator.beta_factor)
+    @printf(io, "\tGamma Factor: %.1f \n", accelerator.gamma_factor)
+    if (accelerator.lattice_version != "")
+        println(io, "Lattice Version: $(accelerator.lattice_version)")
+    else
+        println(io, "Lattice Version: (none)")
+    end
+    println(io, "---------------------------------:")
+end

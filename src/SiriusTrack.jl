@@ -30,10 +30,12 @@ using .Models
 using PrecompileTools
 
 @setup_workload begin
+    flatfile_path::String=(String(@__DIR__))*"/modules/FlatFile/example_flatfile.txt"
     @compile_workload begin
-        p = PosModule.Pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        p = PosModule.pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         m = Models.StorageRing.create_accelerator()
-        pf, st,lf = Tracking.ring_pass(m, p, 1)
+        pf, st, lf = Tracking.ring_pass(m, p, 1)
+        mff = FlatFile.read_flatfile(flatfile_path)
     end
 end
 
