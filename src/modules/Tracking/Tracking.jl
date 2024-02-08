@@ -1,6 +1,6 @@
 
 
-export track_linepass!, track_elementpass!
+export track_linepass!, element_pass
 
 using ..AcceleratorModule: Accelerator
 using ..Elements: Element
@@ -8,64 +8,53 @@ using ..PosModule: Pos
 using ..Auxiliary: vchamber_rectangle, vchamber_rhombus, vchamber_ellipse, st_success, no_plane, plane_x, plane_y, plane_xy
 
 
-function track_elementpass!(
+function element_pass(
     element::Element,            # element through which to track particle
-    orig_pos::Pos{T},            # initial electron coordinates
-    accelerator::Accelerator,    # accelerator parameters
+    particle::Pos{Float64},            # initial electron coordinates
+    accelerator::Accelerator;    # accelerator parameters
     turn_number::Int = 0         # optional turn number parameter
-) where T
+    )
     status = st_success
 
     pass_method = element.properties[:pass_method]
 
     if pass_method == pm_identity_pass
-        status = pm_identity_pass!(orig_pos, element)
+        status = pm_identity_pass!(particle, element)
 
     elseif pass_method == pm_drift_pass
-        status = pm_drift_pass!(orig_pos, element)
+        status = pm_drift_pass!(particle, element)
 
     elseif pass_method == pm_str_mpole_symplectic4_pass
-        status = pm_str_mpole_symplectic4_pass!(orig_pos, element, accelerator)
+        status = pm_str_mpole_symplectic4_pass!(particle, element, accelerator)
 
     elseif pass_method == pm_bnd_mpole_symplectic4_pass
-        status = pm_bnd_mpole_symplectic4_pass!(orig_pos, element, accelerator)
+        status = pm_bnd_mpole_symplectic4_pass!(particle, element, accelerator)
 
     elseif pass_method == pm_corrector_pass
-        status = pm_corrector_pass!(orig_pos, element)
+        status = pm_corrector_pass!(particle, element)
 
     elseif pass_method == pm_cavity_pass
-        status = pm_cavity_pass!(orig_pos, element, accelerator, turn_number)
+        status = pm_cavity_pass!(particle, element, accelerator, turn_number)
 
     else
         return passmethod_not_defined
     end
 
-    return orig_pos, status
+    return particle, status
 end
 
-function track_elementpass!(
-    element::Element,            # element through which to track particle
-    v_pos::Vector{Pos{T}},            # initial electron coordinates
-    accelerator::Accelerator,    # accelerator parameters
-    turn_number::Int = 0         # optional turn number parameter
-) where T
-    status = st_success
-    for pos in v_pos
-        st = track_elementpass!(element, pos, accelerator, turn_number)
-        if st != st_success
-            status = st
-        end
-    end
-    return status
-end
-
-function track_linepass!(
+function line_pass(
     accelerator::Accelerator,
-    orig_pos::Pos{T},
-    element_offset::Int,
-    indices::Vector{Int},
+    particle::Pos{Float64},
+    indices::Vector{Int};
+    element_offset::Int = 1,
     turn_number::Int = 0
-) where T
+    )
+    if any([!(1<=i<=length(accelerator.lattice)+1) for i in indices])
+        leng = length(accelerator.lattice)+1
+        error("invalid indices: outside of lattice bounds. The valid indices should stay between 1 and $leng")
+    end
+
     status = st_success
     lost_plane = no_plane
     tracked_pos = Pos{Float64}[]
@@ -73,14 +62,11 @@ function track_linepass!(
     line = accelerator.lattice
     nr_elements = length(line)
 
-    # Reserve space for pos
-    # pos[end+1:end+length(indices)] .= Pos{T}[]
-
     # Create vector of booleans to determine when to store position
     indcs = falses(nr_elements + 1)
     indcs[indices] .= true
 
-    pos = orig_pos
+    pos = particle
 
     for i in 1:nr_elements
         # Read-only access to element object parameters
@@ -91,12 +77,9 @@ function track_linepass!(
             push!(tracked_pos, copy(pos))
         end
 
-        pos, status = track_elementpass!(element, pos, accelerator, turn_number)
+        pos, status = element_pass(element, pos, accelerator, turn_number=turn_number)
 
         rx, ry = pos.rx, pos.ry
-
-        pm = element.properties[:pass_method]
-        fname = element.fam_name
 
         # Checks if particle is lost
         if !isfinite(rx)
@@ -115,25 +98,17 @@ function track_linepass!(
 
         if (status != particle_lost) && (accelerator.vchamber_on == on)
             if element.properties[:vchamber] == vchamber_rectangle
-                if haskey(element.properties, :hmin) && haskey(element.properties, :hmax) haskey(element.properties, :vmin) && haskey(element.properties, :vmax)
-                    if rx <= element.properties[:hmin] || rx >= element.properties[:hmax]
-                        lost_plane = plane_x
+                if rx <= element.properties[:hmin] || rx >= element.properties[:hmax]
+                    lost_plane = plane_x
+                    status = particle_lost
+                end
+                if ry <= element.properties[:vmin] || ry >= element.properties[:vmax]
+                    if status != particle_lost
+                        lost_plane = plane_y
                         status = particle_lost
+                    else
+                        lost_plane = plane_xy
                     end
-                    if ry <= element.properties[:vmin] || ry >= element.properties[:vmax]
-                        if status != particle_lost
-                            lost_plane = plane_y
-                            status = particle_lost
-                        else
-                            lost_plane = plane_xy
-                        end
-                    end
-                elseif !haskey(element.properties, :hmin) && !haskey(element.properties, :hmax) !haskey(element.properties, :vmin) && !haskey(element.properties, :vmax)
-                    status = st_success
-                    lost_plane = no_plane 
-                else
-                    name = element.fam_name
-                    throw(ErrorException("Missing vaccum chamber properties in the $name."))
                 end
             else
                 status, lost_plane = aux_check_lost_pos(element, rx, ry)
@@ -144,10 +119,10 @@ function track_linepass!(
             # Fill the rest of vector with NaNs
             for j in i+1:nr_elements
                 if indcs[j]
-                    push!(tracked_pos, Pos(NaN, NaN, NaN, NaN, NaN, NaN))
+                    push!(tracked_pos, Pos(NaN64, NaN64, NaN64, NaN64, NaN64, NaN64))
                 end
             end
-            return tracked_pos, status
+            return tracked_pos, status, lost_plane
         end
 
         # Moves to the next element index
@@ -155,40 +130,87 @@ function track_linepass!(
     end
 
     # Stores final particle position at the end of the line
-    if indcs[nr_elements]
+    if indcs[nr_elements+1]
         push!(tracked_pos, pos)
     end
 
-    return tracked_pos, status
+    return tracked_pos, status, lost_plane
 end
 
-function aux_check_lost_pos(element::Element, rx::T, ry::T) where T
-    if haskey(element.properties, :hmin) && haskey(element.properties, :hmax) haskey(element.properties, :vmin) && haskey(element.properties, :vmax) 
-        lx = (element.properties[:hmax] - element.properties[:hmin]) / 2
-        ly = (element.properties[:vmax] - element.properties[:vmin]) / 2
-        xc = (element.properties[:hmax] + element.properties[:hmin]) / 2
-        yc = (element.properties[:vmax] + element.properties[:vmin]) / 2
-        xn = abs((rx - xc) / lx)
-        yn = abs((ry - yc) / ly)
-        
-        amplitude = if element.properties[:vchamber] == vchamber_rhombus
-            xn + yn
-        elseif element.properties[:vchamber] == vchamber_ellipse
-            xn^2 + yn^2
-        else
-            xn^element.properties[:vchamber] + yn^element.properties[:vchamber]
-        end
-
-        if amplitude > 1
-            return particle_lost, plane_xy
-        else
-            return st_success, no_plane
-        end
-    elseif !haskey(element.properties, :hmin) && !haskey(element.properties, :hmax) !haskey(element.properties, :vmin) && !haskey(element.properties, :vmax)
-        return st_success, no_plane 
+function line_pass(
+    accelerator::Accelerator,
+    particle::Pos{Float64},
+    indices::String = "closed";
+    element_offset::Int = 1,
+    turn_number::Int = 0
+    )
+    leng = length(accelerator.lattice)
+    if indices == "closed"
+        idcs = [i for i in 1:1:leng+1]
+    elseif indices == "open"
+        idcs = [i for i in 1:1:leng]
+    elseif indices == "end"
+        idcs = [leng+1]
     else
-        name = element.fam_name
-        throw(ErrorException("Missing vaccum chamber properties in the $name."))
+        error("invalid indices: should be a String:(closed, open, end) or a Vector{Int})")
+    end
+    return line_pass(accelerator, particle, idcs, element_offset=element_offset, turn_number=turn_number)
+end
+
+function ring_pass(accelerator::Accelerator, 
+    particle::Pos{Float64}, 
+    nr_turns::Int = 1; 
+    element_offset::Int = 1,
+    turn_by_turn::Bool = false
+    )
+    if nr_turns<1 
+        error("invalid nr_turns: should be >= 1")
+    end
+    if turn_by_turn
+        v = Pos{Float64}[]
+    end
+    p_in = copy(particle)
+    lostplane = no_plane
+    st = st_success
+    for turn in 1:1:nr_turns
+        tracked, st, lostplane = line_pass(accelerator, p_in, [leng], element_offset=element_offset, turn_number=turn-1)
+        if st == st_success
+            if turn_by_turn
+                push!(v, copy(tracked[1]))
+            end
+        else
+            append!(v, [Pos(NaN64, NaN64, NaN64, NaN64, NaN64, NaN64) for i in 1:1:(nr_turns-turn+1)])
+            break
+        end
+        p_in = tracked[1]
+    end
+    if !turn_by_turn && st == st_success
+        v = [copy(tracked[1])]
+        lostplane = no_plane
+    end
+    return v, st, lostplane
+end
+
+function aux_check_lost_pos(element::Element, rx::Float64, ry::Float64)
+    lx = (element.properties[:hmax] - element.properties[:hmin]) / 2
+    ly = (element.properties[:vmax] - element.properties[:vmin]) / 2
+    xc = (element.properties[:hmax] + element.properties[:hmin]) / 2
+    yc = (element.properties[:vmax] + element.properties[:vmin]) / 2
+    xn = abs((rx - xc) / lx)
+    yn = abs((ry - yc) / ly)
+    
+    if element.properties[:vchamber] == vchamber_rhombus
+        amplitude = xn + yn
+    elseif element.properties[:vchamber] == vchamber_ellipse
+        amplitude = xn^2 + yn^2
+    else
+        amplitude = xn^Int(element.properties[:vchamber]) + yn^Int(element.properties[:vchamber])
+    end
+
+    if amplitude > 1
+        return particle_lost, plane_xy
+    else
+        return st_success, no_plane
     end
 end
 

@@ -32,8 +32,8 @@ using PrecompileTools
 @setup_workload begin
     @compile_workload begin
         p = PosModule.Pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        m = Models.StorageRing.create_accelerator!()
-        pf, st = Tracking.track_linepass!(m, p, 1, [1, length(m.lattice)], 0)
+        m = Models.StorageRing.create_accelerator()
+        pf, st,lf = Tracking.ring_pass(m, p, 1)
     end
 end
 

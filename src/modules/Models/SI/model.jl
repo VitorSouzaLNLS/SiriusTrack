@@ -12,7 +12,7 @@ export create_lattice
 const lattice_symmetry::Int = 5
 const harmonic_number::Int = 864
 const energy::Float64 = 3e9  # [eV]
-
+set_num_integ_steps
 function create_lattice(optics_mode::String, simplified, ids)
     """Return lattice object."""
     # -- selection of optics mode --
@@ -634,7 +634,7 @@ function create_lattice(optics_mode::String, simplified, ids)
     set_rf_frequency!(the_ring)
 
     # -- sets number of integration steps
-    set_num_integ_steps!(the_ring)
+    set_num_integ_steps(the_ring)
 
     # -- define vacuum chamber for all elements
     set_vacuum_chamber(the_ring, ids_vchamber)
@@ -837,7 +837,7 @@ function set_rf_frequency!(accelerator::Accelerator)
     end
 end
 
-function set_num_integ_steps!(accelerator::Accelerator)
+function set_num_integ_steps(accelerator::Accelerator)
     len_bends = 0.050
     len_quads = 0.015
     len_sexts = 0.015

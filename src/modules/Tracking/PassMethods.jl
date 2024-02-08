@@ -24,7 +24,7 @@ const LAMBDABAR::Float64 = 3.86159323e-13 # Compton wavelength/2pi [m]
 const CER::Float64 = 2.81794092e-15       # Classical electron radius [m]
 const CU::Float64 = 1.323094366892892     # 55/(24*sqrt(3)) factor
 
-function aux_drift(pos::Pos{T}, length::T) where T
+function _drift(pos::Pos{T}, length::T) where T
     pnorm::Float64 = 1 / (1 + pos.de)
     norml::Float64 = length * pnorm
     pos.rx += norml * pos.px
@@ -32,13 +32,13 @@ function aux_drift(pos::Pos{T}, length::T) where T
     pos.dl += 0.5 * norml * pnorm * (pos.px*pos.px + pos.py*pos.py)
 end
 
-# function aux_drift_fast(pos::Pos{T}, norml::T) where T
+# function _drift_fast(pos::Pos{T}, norml::T) where T
 #     pos.rx += norml * pos.px
 #     pos.ry += norml * pos.py
 #     pos.dl += 0.5 * norml * (pos.px^2 + pos.py^2) / (1 + pos.de)
 # end
 
-function aux_calcpolykick(pos::Pos{T}, polynom_a::Vector{Float64},
+function _calcpolykick(pos::Pos{T}, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}) where T
     n = min(length(polynom_b), length(polynom_a))
     if n == 0
@@ -56,7 +56,7 @@ function aux_calcpolykick(pos::Pos{T}, polynom_a::Vector{Float64},
     return real_sum, imag_sum
 end
 
-function aux_b2_perp(bx::T, by::T, px::T, py::T, curv::T=1.0) where T
+function _b2_perp(bx::T, by::T, px::T, py::T, curv::T=1.0) where T
     curv2 = curv^2
     v_norm2_inv = curv2 + px^2 + py^2
     b2p = by^2 + bx^2
@@ -66,15 +66,15 @@ function aux_b2_perp(bx::T, by::T, px::T, py::T, curv::T=1.0) where T
     return b2p
 end
 
-function aux_strthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
+function _strthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}, rad_const::Float64=0.0, qexcit_const::Float64=0.0) where T
 
-    real_sum, imag_sum = aux_calcpolykick(pos, polynom_a, polynom_b)
+    real_sum, imag_sum = _calcpolykick(pos, polynom_a, polynom_b)
 
     if rad_const != 0.0
         pnorm = 1 / (1 + pos.de)
         rx, px, ry, py = pos.rx, pos.px * pnorm, pos.ry, pos.py * pnorm
-        b2p = aux_b2_perp(imag_sum, real_sum, px, py)
+        b2p = _b2_perp(imag_sum, real_sum, px, py)
         delta_factor = (1 + pos.de)^2
         dl_ds = 1.0 + ((px*px + py*py) / 2)
         pos.de -= rad_const * delta_factor * b2p * dl_ds * length
@@ -94,17 +94,17 @@ function aux_strthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64
     pos.py += length * imag_sum
 end
 
-function aux_bndthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
+function _bndthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}, irho::Float64, rad_const::Float64=0.0, qexcit_const::Float64=0.0) where T
     
-    real_sum, imag_sum = aux_calcpolykick(pos, polynom_a, polynom_b)
+    real_sum, imag_sum = _calcpolykick(pos, polynom_a, polynom_b)
     de = copy(pos.de)
 
     if rad_const != 0
         pnorm = 1 / (1 + pos.de)
         rx, px, ry, py = pos.rx, pos.px * pnorm, pos.ry, pos.py * pnorm
         curv = 1.0 + (irho * rx)
-        b2p = aux_b2_perp(imag_sum, real_sum + irho, px, py, curv)
+        b2p = _b2_perp(imag_sum, real_sum + irho, px, py, curv)
         delta_factor = (1 + pos.de)^2
         dl_ds = curv + ((px*px + py*py) / 2)
         pos.de -= rad_const * delta_factor * b2p * dl_ds * length
@@ -125,7 +125,7 @@ function aux_bndthinkick(pos::Pos{T}, length::Float64, polynom_a::Vector{Float64
     pos.dl += length * irho * pos.rx
 end
 
-function aux_edge_fringe(pos::Pos{T}, inv_rho::Float64, edge_angle::Float64,
+function _edge_fringe(pos::Pos{T}, inv_rho::Float64, edge_angle::Float64,
     fint::Float64, gap::Float64) where T
     rx::Float64 = pos.rx
     ry::Float64 = pos.px
@@ -141,7 +141,7 @@ function aux_edge_fringe(pos::Pos{T}, inv_rho::Float64, edge_angle::Float64,
     pos.py -= ry * fy
 end
 
-# function aux_translate_pos(pos::Pos{T}, t::Vector{Float64}) where T
+# function _translate_pos(pos::Pos{T}, t::Vector{Float64}) where T
 #     pos.rx += t[1]
 #     pos.px += t[2]
 #     pos.ry += t[3]
@@ -150,7 +150,7 @@ end
 #     pos.dl += t[6]
 # end
 
-# function aux_rotate_pos(pos::Pos{T}, R::Vector{Float64}) where T
+# function _rotate_pos(pos::Pos{T}, R::Vector{Float64}) where T
 #     rx0, px0 = pos.rx, pos.px
 #     ry0, py0 = pos.ry, pos.py
 #     de0, dl0 = pos.de, pos.dl
@@ -168,7 +168,7 @@ function pm_identity_pass!(pos::Pos{T}, element::Element) where T
 end
 
 function pm_drift_pass!(pos::Pos{T}, element::Element) where T
-    aux_drift(pos, element.properties[:length])
+    _drift(pos, element.properties[:length])
     return st_success
 end
 
@@ -197,13 +197,13 @@ function pm_str_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator:
     end
 
     for i in 1:Int(steps)
-        aux_drift(pos, l1)
-        aux_strthinkick(pos, k1, polynom_a, polynom_b, rad_const, 0.0)
-        aux_drift(pos, l2)
-        aux_strthinkick(pos, k2, polynom_a, polynom_b, rad_const, qexcit_const)
-        aux_drift(pos, l2)
-        aux_strthinkick(pos, k1, polynom_a, polynom_b, rad_const, 0.0)
-        aux_drift(pos, l1)
+        _drift(pos, l1)
+        _strthinkick(pos, k1, polynom_a, polynom_b, rad_const, 0.0)
+        _drift(pos, l2)
+        _strthinkick(pos, k2, polynom_a, polynom_b, rad_const, qexcit_const)
+        _drift(pos, l2)
+        _strthinkick(pos, k1, polynom_a, polynom_b, rad_const, 0.0)
+        _drift(pos, l1)
     end
 
     # local_2_global(pos, elem)
@@ -247,19 +247,19 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{T}, elem::Element, accelerator:
 
 
     #global_2_local(pos, elem)
-    aux_edge_fringe(pos, irho, ang_in, fint_in, gap)
+    _edge_fringe(pos, irho, ang_in, fint_in, gap)
 
     for i in 1:1:Int(steps)
-        aux_drift(pos, l1)
-        aux_bndthinkick(pos, k1, polynom_a, polynom_b, irho, rad_const, 0.0)
-        aux_drift(pos, l2)
-        aux_bndthinkick(pos, k2, polynom_a, polynom_b, irho, rad_const, qexcit_const)
-        aux_drift(pos, l2)
-        aux_bndthinkick(pos, k1, polynom_a, polynom_b, irho, rad_const, 0.0)
-        aux_drift(pos, l1)
+        _drift(pos, l1)
+        _bndthinkick(pos, k1, polynom_a, polynom_b, irho, rad_const, 0.0)
+        _drift(pos, l2)
+        _bndthinkick(pos, k2, polynom_a, polynom_b, irho, rad_const, qexcit_const)
+        _drift(pos, l2)
+        _bndthinkick(pos, k1, polynom_a, polynom_b, irho, rad_const, 0.0)
+        _drift(pos, l1)
     end
 
-    aux_edge_fringe(pos, irho, ang_out, fint_out, gap)
+    _edge_fringe(pos, irho, ang_out, fint_out, gap)
     #local_2_global(pos, elem)
 
     return st_success
