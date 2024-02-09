@@ -3,12 +3,10 @@
 import Base: !=, setproperty!, setfield!, getproperty, show
 using Printf
 using ..Auxiliary
-using ..Constants
+using ..Constants: electron_rest_energy_eV, light_speed
 using ..Elements: Element
 
 #export Accelerator, Accelerator!, find_spos, find_indices
-
-electron_rest_energy_eV = Constants.electron_rest_energy_eV
 
 mutable struct Accelerator
     energy::Float64
@@ -22,13 +20,15 @@ mutable struct Accelerator
     velocity::Float64
     beta_factor::Float64
     gamma_factor::Float64
+    brho::Float64
 end    
 
 function Accelerator!(energy::Real)
     gamma = energy/electron_rest_energy_eV
     beta = sqrt(1 - (1 / gamma^2))
     velocity = beta * light_speed
-    accelerator = Accelerator(energy, Auxiliary.off, Auxiliary.off, Auxiliary.off, 0, Element[], "", 0.0, velocity, beta, gamma)
+    brho = beta * energy / light_speed
+    accelerator = Accelerator(energy, Auxiliary.off, Auxiliary.off, Auxiliary.off, 0, Element[], "", 0.0, velocity, beta, gamma, brho)
     return accelerator
 end
 
@@ -63,23 +63,9 @@ end
 
 function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
     if symbol == :energy
-        # Custom logic for setting the energy field
-        if !(value <= electron_rest_energy_eV)
-            #accelerator.energy = value
-            setfield!(accelerator, :energy, value)
-
-            gamma = value/electron_rest_energy_eV
-            setfield!(accelerator, :gamma_factor, gamma)
-
-            beta = sqrt(1 - (1 / gamma^2))
-            setfield!(accelerator, :beta_factor, beta)
-
-            velocity = beta * light_speed
-            setfield!(accelerator, :velocity, velocity)
-        end
+        adjust_beam_parameters(accelerator, :energy, value)    
     
     elseif symbol == :cavity_state
-        # Custom logic for setting the cavity_state field
         if isa(value, Auxiliary.BoolState) || isa(value, Int) || isa(value, Bool)
             val = Int(value)
             if 0 <= val <= 1
@@ -91,7 +77,6 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
         end
     
     elseif symbol == :radiation_state
-        # Custom logic for setting the radiation_on field
         if isa(value, Auxiliary.BoolState) || isa(value, Int) || isa(value, Bool)
             val = Int(value)
             if 0 <= val <= 2
@@ -102,48 +87,33 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
         end
     
     elseif symbol == :vchamber_state
-        # Custom logic for setting the vchamber_state field
         setfield!(accelerator, :vchamber_state, value)
     
     elseif symbol == :harmonic_number
-        # Custom logic for setting the harmonic_number field
         setfield!(accelerator, :harmonic_number, value)
 
     elseif symbol == :lattice
-        # Custom logic for setting the lattice field
         setfield!(accelerator, :lattice, value)
-        last_index = Int(length(value))+1
         len = find_spos(accelerator, indices="closed")[end] # closed lattice
         setfield!(accelerator, :length, len)
 
     elseif symbol == :lattice_version
-        # Custom logic for setting the lattice_version field
-        # setfield!(accelerator, :lattice_version, value)
-        @warn("Changing the \"lattice_version\" manually is not recommended..")
+        @warn("Changing the \"lattice_version\" manually is not recommended... But if its necessary, use: \"setfield!(Accelerator, :latice_version, value)\"")
     
-    elseif symbol == :length # Do nothing -> automatic calculation
-        # Custom logic for setting the length field
-        # accelerator.length = value
+    elseif symbol == :length 
         @warn("Cant manually change the \"length\". Consider changing the accelerator's lattice.")
-        # setfield!(accelerator, :length, value)
     
-    elseif symbol == :velocity # Do nothing -> automatic calculation
-        # Custom logic for setting the velocity field
-        #accelerator.velocity = value
-        # @warn("Cant manually change the \"velocity\". Consider changing the accelerator's energy.")
-        # #update_lorentz_factors(accelerator)
+    elseif symbol == :velocity 
+        adjust_beam_parameters(accelerator, :velocity, value)
 
-    elseif symbol == :beta_factor # Do nothing -> automatic calculation
-        # Custom logic for setting the beta_factor field
-        #accelerator.beta_factor = value
-        # @warn("Cant manually change the \"beta_factor\". Consider changing the accelerator's energy.")
-        # #update_lorentz_factors(accelerator)
+    elseif symbol == :beta_factor 
+        adjust_beam_parameters(accelerator, :beta_factor, value)
 
-    elseif symbol == :gamma_factor # Do nothing -> automatic calculation
-        # Custom logic for setting the gamma_factor field
-        #accelerator.gamma_factor = value
-        # @warn("Cant manually change the \"gamma_factor\". Consider changing the accelerator's energy.")
-        #update_lorentz_factors(accelerator)
+    elseif symbol == :gamma_factor 
+        adjust_beam_parameters(accelerator, :gamma_factor, value)
+
+    elseif symbol == :brho 
+        adjust_beam_parameters(accelerator, :brho, value)
     else
         throw(ArgumentError("Field $symbol is not a valid field for Accelerator"))
     end
@@ -225,4 +195,46 @@ function Base.show(io::IO, ::MIME"text/plain", accelerator::Accelerator)
         println(io, "Lattice Version: (none)")
     end
     println(io, "--------------------------------------------")
+end
+
+function adjust_beam_parameters(accelerator::Accelerator, property::Symbol, value::Float64)
+    if property == :energy
+        energy = value
+        gamma_factor = energy / electron_rest_energy_eV
+        beta_factor = sqrt(1.0 - (1.0 / (gamma_factor^2)))
+        velocity = beta_factor * light_speed
+        brho = gamma_factor * beta_factor * light_speed 
+    elseif property == :gamma_factor
+        gamma_factor = value
+        energy = gamma_factor * electron_rest_energy_eV
+        beta_factor = sqrt(1.0 - (1.0 / (gamma_factor^2)))
+        velocity = beta_factor * light_speed
+        brho = gamma_factor * beta_factor * light_speed 
+    elseif property == :beta_factor
+        beta_factor = value
+        gamma_factor = 1.0 / sqrt(1.0 - (value^2))
+        energy = gamma_factor * electron_rest_energy_eV
+        velocity = beta_factor * light_speed
+        brho = gamma_factor * beta_factor * light_speed 
+    elseif property == :velocity
+        velocity = value
+        beta_factor = value / light_speed
+        gamma_factor = 1.0 / sqrt(1.0 - (beta_factor^2))
+        energy = gamma_factor * electron_rest_energy_eV
+        brho = gamma_factor * beta_factor * light_speed 
+    elseif property == :brho
+        brho = value
+        k = brho / (electron_rest_energy_eV / light_speed)
+        gamma_factor = sqrt(1.0 + (k^2))
+        energy = gamma_factor * electron_rest_energy_eV
+        beta_factor = sqrt(1.0 - (1.0 / (gamma_factor^2)))
+        velocity = beta_factor * light_speed
+    else
+        error("invalid property: $property")
+    end
+    setfield!(accelerator, :energy, energy)
+    setfield!(accelerator, :gamma_factor, gamma_factor)
+    setfield!(accelerator, :beta_factor, beta_factor)
+    setfield!(accelerator, :velocity, velocity)
+    setfield!(accelerator, :brho, brho)
 end
