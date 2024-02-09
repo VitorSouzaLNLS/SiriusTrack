@@ -4,7 +4,9 @@ using ..PosModule: Pos, pos, Pos_get_max
 using ..AcceleratorModule: Accelerator, find_cav_indices
 using ..Elements: Element
 using LinearAlgebra
+# using DocumenterTools
 
+# @doc """This function computes the 4-D closed orbit""" 
 function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} = pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), element_offset::Int=1)
     delta = 1e-9              # [m],[rad],[dE/E]
     tolerance = 2.22044604925e-14
