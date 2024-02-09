@@ -18,6 +18,8 @@ include("modules/FlatFile/flatfileModule.jl")
 
 include("modules/Models/modelsModule.jl")
 
+include("modules/Orbit/orbitModule.jl")
+
 using .PosModule
 using .Constants
 using .Auxiliary
@@ -26,6 +28,7 @@ using .AcceleratorModule
 using .Tracking
 using .FlatFile
 using .Models
+using .Orbit
 
 using PrecompileTools
 
@@ -34,8 +37,13 @@ using PrecompileTools
     @compile_workload begin
         p = PosModule.pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         m = Models.StorageRing.create_accelerator()
+        m.radiation_state = Auxiliary.full
+        m.cavity_state = Auxiliary.on
+        m.vchamber_state = Auxiliary.on
         pf, st, lf = Tracking.ring_pass(m, p, 1)
         mff = FlatFile.read_flatfile(flatfile_path)
+        Orbit.find_orbit4(m)
+        Orbit.find_orbit6(m)
     end
 end
 

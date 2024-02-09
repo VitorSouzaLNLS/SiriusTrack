@@ -7,6 +7,7 @@ using ..Auxiliary: full, no_plane, off, on, pm_bnd_mpole_symplectic4_pass, pm_ca
     st_success
 using ..Elements: Element
 using ..PosModule: Pos
+using ..Constants: reduced_planck_constant, electron_charge, electron_mass, light_speed
 
 const DRIFT1::Float64  =  0.6756035959798286638e00
 const DRIFT2::Float64  = -0.1756035959798286639e00
@@ -19,6 +20,7 @@ const M0C2::Float64 = 5.10999060e5        # Electron rest mass [eV]
 const LAMBDABAR::Float64 = 3.86159323e-13 # Compton wavelength/2pi [m]
 const CER::Float64 = 2.81794092e-15       # Classical electron radius [m]
 const CU::Float64 = 1.323094366892892     # 55/(24*sqrt(3)) factor
+const CQEXT::Float64 = sqrt(CU * CER * reduced_planck_constant * electron_charge * light_speed) * electron_charge * electron_charge / ((electron_mass*light_speed*light_speed)^3) #  for quant. diff. kick
 
 function _drift(pos::Pos{Float64}, length::Float64) 
     pnorm::Float64 = 1 / (1 + pos.de)
@@ -302,13 +304,12 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
     T0 = L0 / velocity
 
     if elem.properties[:length] == 0
-        de, dl = pos.de, pos.dl
-        pos.de += -nv * sin(TWOPI * frf * (dl/velocity - (harmonic_number/frf - T0)*turn_number) - philag)
+        pos.de += -nv * sin((TWOPI * frf * ((pos.dl/velocity) - ((harmonic_number/frf - T0)*turn_number))) - philag)
         #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
     else
-        rx, px = pos.rx, pos.px
-        ry, py = pos.ry, pos.py
-        de, dl = pos.de, pos.dl
+        px = pos.px
+        py = pos.py
+        de = pos.de
 
         # Drift half length
         pnorm = 1 / (1 + de)
@@ -318,7 +319,7 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
         pos.dl += 0.5 * norml * pnorm * (px*px + py*py)
 
         # Longitudinal momentum kick
-        pos.de += -nv * sin(TWOPI * frf * (dl/velocity - (harmonic_number/frf - T0)*turn_number) - philag)
+        pos.de += -nv * sin((TWOPI * frf * ((pos.dl/velocity) - ((harmonic_number/frf - T0)*turn_number))) - philag)
         #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
 
         # Drift half length

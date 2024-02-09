@@ -6,7 +6,7 @@ using ..Auxiliary
 using ..Constants
 using ..Elements: Element
 
-export Accelerator, Accelerator!, find_spos, find_indices
+#export Accelerator, Accelerator!, find_spos, find_indices
 
 electron_rest_energy_eV = Constants.electron_rest_energy_eV
 
@@ -48,7 +48,7 @@ function Base.:(!=)(acc1::Accelerator, acc2::Accelerator)
 end
 
 function update_cavity(accelerator::Accelerator)
-    cavity_indices = find_cavities(accelerator)
+    cavity_indices = find_cav_indices(accelerator)
     for index in cavity_indices
         cav = accelerator.lattice[index]
         if accelerator.cavity_state == on
@@ -113,7 +113,7 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
         # Custom logic for setting the lattice field
         setfield!(accelerator, :lattice, value)
         last_index = Int(length(value))+1
-        len = find_spos(accelerator, last_index)[1] # closed lattice
+        len = find_spos(accelerator, indices="closed")[end] # closed lattice
         setfield!(accelerator, :length, len)
 
     elseif symbol == :lattice_version
@@ -149,44 +149,26 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
     end
 end
 
-function _all_spos(accelerator::Accelerator)
-    spos = Float64[]
-    temp_spos = 0.0
-    latt = accelerator.lattice
-    for elem in latt
-        push!(spos, temp_spos)
-        temp_spos += elem.properties[:length]
-    end
-    push!(spos, temp_spos)
-    return spos
-end
-
-function find_spos(accelerator::Accelerator, indices::Vector{Int})
-    spos = Float64[]
-    all_spos = _all_spos(accelerator)
-    for index in indices
-        push!(spos, all_spos[index])
-    end
-    return spos
-end
-
-function find_spos(accelerator::Accelerator, index::Int)
-    if 1 <= index <= length(accelerator.lattice)+1
-        return find_spos(accelerator, [index])
-    else
-        throw(ArgumentError("Invalid index $index for the lattice"))
-    end
-end
-
 function find_spos(accelerator::Accelerator; indices::T="open") where T<:Union{String, Vector{Int}}
-    idx = Vector{Int}(range(1, length(accelerator.lattice)))
-    if indices == "open"
-        return find_spos(accelerator, idx)
-    elseif indices == "closed"
-        push!(idx, Int(length(accelerator.lattice)+1))
-        return find_spos(accelerator, idx)
+    spos::Vector{Float64} = append!([0.0], [elem.properties[:length] for elem in accelerator.lattice])
+    spos = cumsum(spos)
+    if isa(indices, String)
+        if indices == "open"
+            return spos[1:end-1]
+        elseif indices == "closed"
+            return spos
+        else
+            throw(ArgumentError("invalid indices: should be (String)\"closed\" or \"open\" or (Vector{Int})"))
+        end
+    elseif isa(indices, Vector{Int})
+        if all([(1<=i<=accelerator.length) for i in indices])
+            return spos[indices]
+        else
+            leng = length(accelerator.lattice)
+            throw(ArgumentError("invalid index in argument \"indices\": should stay between 1 and $leng"))
+        end
     else
-        return find_spos(accelerator, indices)
+        throw(ArgumentError("invalid indices: should be (String)\"closed\" or \"open\" or (Vector{Int})"))
     end
 end
 
@@ -202,7 +184,7 @@ function find_indices(accelerator::Accelerator, property::String, value::Union{R
     return indices
 end
 
-function find_cavities(accelerator::Accelerator)
+function find_cav_indices(accelerator::Accelerator)
     idcs = Int[]
     for i in 1:1:length(accelerator.lattice) 
         if haskey(accelerator.lattice[i].properties, :frequency)
@@ -226,21 +208,21 @@ function lattice_shift!(accelerator::Accelerator, index::Int)
     accelerator.lattice = new_lattice
 end
 
-function Base.show(io::IO, ::MIME"text/plain", acc::Accelerator)
-    println(io, "---------- Accelerator ----------:")
-    println(io, "\tEnergy: ", acc.energy)
-    println(io, "\tCavity State: ", acc.cavity_state)
-    println(io, "\tRadiation State: ", acc.radiation_state)
-    println(io, "\tVchamber State: ", acc.vchamber_state)
-    println(io, "\tHarmonic Number: ", acc.harmonic_number)
-    println(io, "\tLength: ", acc.length)
+function Base.show(io::IO, ::MIME"text/plain", accelerator::Accelerator)
+    println(io, "---------------- Accelerator ---------------")
+    println(io, "\tEnergy: ", accelerator.energy)
+    println(io, "\tCavity State: ", accelerator.cavity_state)
+    println(io, "\tRadiation State: ", accelerator.radiation_state)
+    println(io, "\tVchamber State: ", accelerator.vchamber_state)
+    println(io, "\tHarmonic Number: ", accelerator.harmonic_number)
+    println(io, "\tLength: ", accelerator.length)
     @printf(io, "\tVelocity: %.8f [m/s]\n", accelerator.velocity)
     @printf(io, "\tBeta Factor: %.16f \n", accelerator.beta_factor)
     @printf(io, "\tGamma Factor: %.1f \n", accelerator.gamma_factor)
     if (accelerator.lattice_version != "")
-        println(io, "Lattice Version: $(accelerator.lattice_version)")
+        println(io, "\tLattice Version: $(accelerator.lattice_version)")
     else
         println(io, "Lattice Version: (none)")
     end
-    println(io, "---------------------------------:")
+    println(io, "--------------------------------------------")
 end

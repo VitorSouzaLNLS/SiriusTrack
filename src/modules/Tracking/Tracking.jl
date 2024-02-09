@@ -57,6 +57,10 @@ function line_pass(
         leng = length(accelerator.lattice)+1
         error("invalid indices: outside of lattice bounds. The valid indices should stay between 1 and $leng")
     end
+    if element_offset > length(accelerator.lattice) || element_offset < 1
+        leng = length(accelerator.lattice)
+        error("invalid indices: outside of lattice bounds. The valid indices should stay between 1 and $leng")
+    end
 
     status = st_success
     lost_plane = no_plane
@@ -120,7 +124,7 @@ function line_pass(
 
         if status != st_success
             # Fill the rest of vector with NaNs
-            for j in i+1:nr_elements
+            for j in i+1:Int(length(indcs))
                 if indcs[j]
                     push!(tracked_pos, Pos(NaN64, NaN64, NaN64, NaN64, NaN64, NaN64))
                 end
@@ -137,6 +141,7 @@ function line_pass(
         push!(tracked_pos, pos)
     end
 
+    #println(stdout, "linepass posvec exit = \n$tracked_pos\n")
     return tracked_pos, status, lost_plane
 end
 
