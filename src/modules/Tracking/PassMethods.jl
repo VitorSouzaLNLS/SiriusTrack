@@ -299,9 +299,10 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
     frf = elem.properties[:frequency]
     harmonic_number = accelerator.harmonic_number
     velocity = accelerator.velocity
-    #velocity = light_speed
+    # velocity = light_speed
     L0 = accelerator.length
     T0 = L0 / velocity
+    #println(stdout,"\nfactor = ",harmonic_number/frf - T0)
 
     if elem.properties[:length] == 0
         pos.de += -nv * sin((TWOPI * frf * ((pos.dl/velocity) - ((harmonic_number/frf - T0)*turn_number))) - philag)

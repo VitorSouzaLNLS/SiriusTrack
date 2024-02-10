@@ -1,8 +1,9 @@
-using ..Auxiliary: BoolState, off, on, full, st_findorbit_not_converged, st_success, st_findorbit_one_turn_matrix_problem, no_plane
-using ..Tracking: line_pass
+using ..Auxiliary: BoolState, off, on, full, st_findorbit_not_converged, st_success, st_findorbit_one_turn_matrix_problem, no_plane, pm_bnd_mpole_symplectic4_pass
+using ..Tracking: line_pass, CGAMMA
 using ..PosModule: Pos, pos, Pos_get_max
 using ..AcceleratorModule: Accelerator, find_cav_indices
 using ..Elements: Element
+using ..Constants: light_speed
 using LinearAlgebra
 # using DocumenterTools
 
@@ -79,10 +80,19 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
     if radsts == full
         accelerator.radiation_state = on
     end
-    
+
     cav::Element = accelerator.lattice[find_cav_indices(accelerator)[1]]
+
+    if true
+        u0 = get_U0(accelerator)
+        voltage = cav.properties[:voltage]
+        fixed_point_guess[6] = -accelerator.length/(2*pi*accelerator.harmonic_number) * asin(u0/voltage)
+    end
+
     frf::Float64 = cav.properties[:frequency]
-    longitudinal_fixed_point::Float64 = accelerator.velocity * accelerator.harmonic_number / frf - accelerator.length
+    longitudinal_fixed_point::Float64 = (accelerator.velocity * accelerator.harmonic_number / frf) - accelerator.length
+
+    println(stdout, "fixed dl = $longitudinal_fixed_point, guess = $fixed_point_guess")
 
     co::Vector{Pos{Float64}} = fill(fixed_point_guess, 7)
     D::Vector{Pos{Float64}} = fill(pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 7)
@@ -100,7 +110,7 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
         status = st_success
         co2::Vector{Pos{Float64}} = fill(pos(0, 0, 0, 0, 0, 0), 7)
         for i in [1, 2, 3, 4, 5, 6, 7]
-            pf, status, _ = line_pass(accelerator, co[i], [leng+1])
+            pf, status, _ = line_pass(accelerator, co[i], [leng+1], turn_number=1)
             co2[i] = copy(pf[1])
         end
         if status != st_success
@@ -183,4 +193,20 @@ function linalg_solve6_posvec(A::Vector{Pos{Float64}}, B::Pos{Float64})
     X = pos(x[1], x[2], x[3], x[4], x[5], x[6])
     
     return X
+end
+
+function get_U0(accelerator::Accelerator)
+    theta = []
+    leng = []
+    for e in accelerator.lattice
+        if e.properties[:pass_method] == pm_bnd_mpole_symplectic4_pass
+            push!(theta, e.properties[:angle])
+            push!(leng, e.properties[:length])
+        end
+    end
+    coef = CGAMMA*1e9/2/pi * (accelerator.energy/1e9)^4
+    u = sum(abs.(theta.*theta./leng)) * coef
+    println(stdout, u)
+    #return u
+    return 474901.6163522302
 end
