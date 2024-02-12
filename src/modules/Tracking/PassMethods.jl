@@ -38,11 +38,8 @@ end
 
 function _calcpolykick(pos::Pos{Float64}, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}) 
-    n = min(length(polynom_b), length(polynom_a))
-    if n == 0
-        real_sum = 0.0
-        imag_sum = 0.0
-    else
+    n::Int = min(length(polynom_b), length(polynom_a))
+    if n != 0
         real_sum = polynom_b[n]
         imag_sum = polynom_a[n]
         for i = n-1:-1:1
@@ -50,14 +47,15 @@ function _calcpolykick(pos::Pos{Float64}, polynom_a::Vector{Float64},
             imag_sum = imag_sum * pos.rx + real_sum * pos.ry + polynom_a[i]
             real_sum = real_sum_tmp
         end
+        return real_sum, imag_sum
     end
-    return real_sum, imag_sum
+    return 0.0, 0.0
 end
 
 function _b2_perp(bx::Float64, by::Float64, px::Float64, py::Float64, curv::Float64=1.0) 
-    curv2 = curv^2
-    v_norm2_inv = curv2 + px^2 + py^2
-    b2p = by^2 + bx^2
+    curv2::Float64 = curv^2
+    v_norm2_inv::Float64 = curv2 + px^2 + py^2
+    b2p::Float64 = by^2 + bx^2
     b2p *= curv2
     b2p += (bx * py - by * px)^2
     b2p /= v_norm2_inv
@@ -67,19 +65,23 @@ end
 function _strthinkick(pos::Pos{Float64}, length::Float64, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}, rad_const::Float64=0.0, qexcit_const::Float64=0.0) 
 
+    real_sum::Float64 = 0.0
+    imag_sum::Float64 = 0.0
     real_sum, imag_sum = _calcpolykick(pos, polynom_a, polynom_b)
 
     if rad_const != 0.0
-        pnorm = 1 / (1 + pos.de)
-        rx, px, ry, py = pos.rx, pos.px * pnorm, pos.ry, pos.py * pnorm
+        pnorm::Float64 = 1 / (1 + pos.de)
+        px::Float64 = pos.px * pnorm
+        py::Float64 = pos.py * pnorm
+        b2p::Float64 = 0.0
         b2p = _b2_perp(imag_sum, real_sum, px, py)
-        delta_factor = (1 + pos.de)^2
-        dl_ds = 1.0 + ((px*px + py*py) / 2)
+        delta_factor::Float64  = (1 + pos.de)^2
+        dl_ds::Float64  = 1.0 + ((px*px + py*py) / 2)
         pos.de -= rad_const * delta_factor * b2p * dl_ds * length
 
         if qexcit_const != 0.0
             # quantum excitation kick
-            d = delta_factor * qexcit_const * sqrt(b2p^1.5 * dl_ds)
+            d::Float64 = delta_factor * qexcit_const * sqrt(b2p^1.5 * dl_ds)
             pos.de += d * randn()
         end
 
@@ -95,21 +97,25 @@ end
 function _bndthinkick(pos::Pos{Float64}, length::Float64, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}, irho::Float64, rad_const::Float64=0.0, qexcit_const::Float64=0.0) 
     
+    real_sum::Float64 = 0.0
+    imag_sum::Float64 = 0.0
     real_sum, imag_sum = _calcpolykick(pos, polynom_a, polynom_b)
-    de = copy(pos.de)
+    de::Float64 = pos.de
 
-    if rad_const != 0
-        pnorm = 1 / (1 + pos.de)
-        rx, px, ry, py = pos.rx, pos.px * pnorm, pos.ry, pos.py * pnorm
-        curv = 1.0 + (irho * rx)
-        b2p = _b2_perp(imag_sum, real_sum + irho, px, py, curv)
-        delta_factor = (1 + pos.de)^2
-        dl_ds = curv + ((px*px + py*py) / 2)
+    if rad_const != 0.0
+        pnorm::Float64 = 1 / (1 + pos.de)
+        px::Float64 = pos.px * pnorm
+        py::Float64 = pos.py * pnorm
+        curv::Float64 = 1.0 + (irho * pos.rx)
+        b2p::Float64 = 0.0
+        b2p = _b2_perp(imag_sum, real_sum+irho, px, py, curv)
+        delta_factor::Float64 = (1 + pos.de)^2
+        dl_ds::Float64 = curv + ((px*px + py*py) / 2)
         pos.de -= rad_const * delta_factor * b2p * dl_ds * length
 
-        if qexcit_const != 0
+        if qexcit_const != 0.0
             # quantum excitation kick
-            d = delta_factor * qexcit_const * sqrt(b2p^1.5 * dl_ds)
+            d::Float64 = delta_factor * qexcit_const * sqrt(b2p^1.5 * dl_ds)
             pos.de += d * randn()
         end
 
@@ -125,15 +131,15 @@ end
 
 function _edge_fringe(pos::Pos{Float64}, inv_rho::Float64, edge_angle::Float64,
     fint::Float64, gap::Float64) 
-    rx::Float64 = pos.rx
-    ry::Float64 = pos.px
     de::Float64 = pos.de
+    rx::Float64 = pos.rx
+    ry::Float64 = pos.ry
 
-    fx = inv_rho * tan(edge_angle) / (1.0 + de)
+    fx::Float64 = inv_rho * tan(edge_angle) / (1.0 + de)
 
-    psi_bar = edge_angle - inv_rho * gap * fint * (1 + sin(edge_angle)^2) / cos(edge_angle) / (1.0 + de)
+    psi_bar::Float64 = edge_angle - inv_rho * gap * fint * (1 + sin(edge_angle)^2) / cos(edge_angle) / (1.0 + de)
     
-    fy = inv_rho * tan(psi_bar) / (1.0 + de)
+    fy::Float64 = inv_rho * tan(psi_bar) / (1.0 + de)
     
     pos.px += rx * fx
     pos.py -= ry * fy
@@ -173,18 +179,17 @@ end
 function pm_str_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelerator) 
     # global_2_local(pos, elem)
     # steps = haskey(elem.properties, :nr_steps) ? elem.properties[:nr_steps] : 20
-    steps = elem.properties[:nr_steps]
+    steps::Int = elem.properties[:nr_steps]
 
-
-    sl = elem.properties[:length] / Float64(steps)
-    l1 = sl * DRIFT1
-    l2 = sl * DRIFT2
-    k1 = sl * KICK1
-    k2 = sl * KICK2
-    polynom_b = elem.properties[:polynom_b]
-    polynom_a = elem.properties[:polynom_a]
-    rad_const = 0.0
-    qexcit_const = 0.0
+    sl::Float64 = elem.properties[:length] / steps
+    l1::Float64 = sl * DRIFT1
+    l2::Float64 = sl * DRIFT2
+    k1::Float64 = sl * KICK1
+    k2::Float64 = sl * KICK2
+    polynom_b::Vector{Float64} = elem.properties[:polynom_b]
+    polynom_a::Vector{Float64} = elem.properties[:polynom_a]
+    rad_const::Float64 = 0.0
+    qexcit_const::Float64 = 0.0
 
     if accelerator.radiation_state == on
         rad_const = CGAMMA * (accelerator.energy/1e9)^3 / TWOPI
@@ -194,7 +199,7 @@ function pm_str_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
-    for i in 1:Int(steps)
+    for i in 1:steps
         _drift(pos, l1)
         _strthinkick(pos, k1, polynom_a, polynom_b, rad_const, 0.0)
         _drift(pos, l2)
@@ -213,21 +218,20 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
     #     return pm_str_mpole_symplectic4_pass!(pos, elem, accelerator)
     # end
     #steps = haskey(elem.properties, :nr_steps) ? elem.properties[:nr_steps] : 20
-    steps = elem.properties[:nr_steps]
+    steps::Int = elem.properties[:nr_steps]
 
+    sl   ::Float64 = elem.properties[:length] / Float64(steps)
+    l1   ::Float64 = sl * DRIFT1
+    l2   ::Float64 = sl * DRIFT2
+    k1   ::Float64 = sl * KICK1
+    k2   ::Float64 = sl * KICK2
+    irho ::Float64 = elem.properties[:angle] / elem.properties[:length]
 
-    sl = elem.properties[:length] / Float64(steps)
-    l1 = sl * DRIFT1
-    l2 = sl * DRIFT2
-    k1 = sl * KICK1
-    k2 = sl * KICK2
-    irho = elem.properties[:angle] / elem.properties[:length]
-
-    polynom_b = elem.properties[:polynom_b]
-    polynom_a = elem.properties[:polynom_a]
+    polynom_b::Vector{Float64} = elem.properties[:polynom_b]
+    polynom_a::Vector{Float64} = elem.properties[:polynom_a]
     
-    rad_const = 0.0
-    qexcit_const = 0.0
+    rad_const::Float64 = 0.0
+    qexcit_const::Float64 = 0.0
 
     if accelerator.radiation_state == on
         rad_const = CGAMMA * (accelerator.energy / 1e9)^3 / (TWOPI)
@@ -237,11 +241,16 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
-    ang_in = haskey(elem.properties, :angle_in) ? elem.properties[:angle_in] : 0.0
-    ang_out = haskey(elem.properties, :angle_out) ? elem.properties[:angle_out] : 0.0
-    fint_in = haskey(elem.properties, :fint_in) ? elem.properties[:fint_in] : 0.0
-    fint_out = haskey(elem.properties, :fint_out) ? elem.properties[:fint_out] : 0.0
-    gap = haskey(elem.properties, :gap) ? elem.properties[:gap] : 0.0
+    # ang_in = haskey(elem.properties, :angle_in) ? elem.properties[:angle_in] : 0.0
+    # ang_out = haskey(elem.properties, :angle_out) ? elem.properties[:angle_out] : 0.0
+    # fint_in = haskey(elem.properties, :fint_in) ? elem.properties[:fint_in] : 0.0
+    # fint_out = haskey(elem.properties, :fint_out) ? elem.properties[:fint_out] : 0.0
+    # gap = haskey(elem.properties, :gap) ? elem.properties[:gap] : 0.0
+    ang_in   ::Float64 = elem.properties[:angle_in]
+    ang_out  ::Float64 = elem.properties[:angle_out]
+    fint_in  ::Float64 = elem.properties[:fint_in]
+    fint_out ::Float64 = elem.properties[:fint_out]
+    gap      ::Float64 = elem.properties[:gap]
 
 
     #global_2_local(pos, elem)
@@ -265,18 +274,18 @@ end
 
 function pm_corrector_pass!(pos::Pos{Float64}, elem::Element) 
     #global_2_local(pos, elem)
-    xkick = elem.properties[:hkick]
-    ykick = elem.properties[:vkick]
+    xkick::Float64 = elem.properties[:hkick]
+    ykick::Float64 = elem.properties[:vkick]
 
     if elem.properties[:length] == 0
         pos.px += hkick
         pos.py += vkick
     else
-        rx, px = pos.rx, pos.px
-        ry, py = pos.ry, pos.py
-        de, dl = pos.de, pos.dl
-        pnorm = 1 / (1 + de)
-        norml = elem.properties[:length] * pnorm
+        px::Float64 = pos.px
+        py::Float64 = pos.py
+        de = pos.de
+        pnorm::Float64 = 1 / (1 + de)
+        norml::Float64 = elem.properties[:length] * pnorm
         pos.dl += norml * pnorm * 0.5 * (xkick * xkick/3.0 + ykick * ykick/3.0 + px*px + py*py + px * xkick + py * ykick)
         pos.rx += norml * (px + 0.5 * xkick)
         pos.px += xkick
@@ -294,27 +303,27 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
     end
 
     #global_2_local(pos, elem)
-    nv = elem.properties[:voltage] / accelerator.energy
-    philag = elem.properties[:phase_lag]
-    frf = elem.properties[:frequency]
-    harmonic_number = accelerator.harmonic_number
-    velocity = accelerator.velocity
+    nv::Float64 = elem.properties[:voltage] / accelerator.energy
+    philag::Float64 = elem.properties[:phase_lag]
+    frf::Float64 = elem.properties[:frequency]
+    harmonic_number::Int = accelerator.harmonic_number
+    velocity::Float64 = accelerator.velocity
     # velocity = light_speed
-    L0 = accelerator.length
-    T0 = L0 / velocity
+    L0::Float64 = accelerator.length
+    T0::Float64 = L0 / velocity
     #println(stdout,"\nfactor = ",harmonic_number/frf - T0)
 
     if elem.properties[:length] == 0
         pos.de += -nv * sin((TWOPI * frf * ((pos.dl/velocity) - ((harmonic_number/frf - T0)*turn_number))) - philag)
         #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
     else
-        px = pos.px
-        py = pos.py
-        de = pos.de
+        px::Float64 = pos.px
+        py::Float64 = pos.py
+        de::Float64 = pos.de
 
         # Drift half length
-        pnorm = 1 / (1 + de)
-        norml = (0.5 * elem.properties[:length]) * pnorm
+        pnorm::Float64 = 1 / (1 + de)
+        norml::Float64 = (0.5 * elem.properties[:length]) * pnorm
         pos.rx += norml * px
         pos.ry += norml * py
         pos.dl += 0.5 * norml * pnorm * (px*px + py*py)

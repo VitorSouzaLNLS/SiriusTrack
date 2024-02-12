@@ -6,20 +6,20 @@ using ..AcceleratorModule: Accelerator
 using ..Auxiliary: no_plane, plane_x, plane_xy, plane_y, pm_bnd_mpole_symplectic4_pass,
     pm_cavity_pass, pm_corrector_pass, pm_drift_pass, pm_identity_pass,
     pm_str_mpole_symplectic4_pass, st_particle_lost, st_success, vchamber_ellipse,
-    vchamber_rectangle, vchamber_rhombus
+    vchamber_rectangle, vchamber_rhombus, PassMethod, Status
 using ..Elements: Element
 using ..PosModule: Pos
 
 
 function element_pass(
     element::Element,            # element through which to track particle
-    particle::Pos{Float64},            # initial electron coordinates
+    particle::Pos{Float64},      # initial electron coordinates
     accelerator::Accelerator;    # accelerator parameters
     turn_number::Int = 0         # optional turn number parameter
     )
-    status = st_success
+    status::Status = st_success
 
-    pass_method = element.properties[:pass_method]
+    pass_method::PassMethod = element.properties[:pass_method]
 
     if pass_method == pm_identity_pass
         status = pm_identity_pass!(particle, element)
@@ -43,7 +43,7 @@ function element_pass(
         return st_passmethod_not_defined
     end
 
-    return particle, status
+    return status
 end
 
 function line_pass(
@@ -84,7 +84,7 @@ function line_pass(
             push!(tracked_pos, copy(pos))
         end
 
-        pos, status = element_pass(element, pos, accelerator, turn_number=turn_number)
+        status = element_pass(element, pos, accelerator, turn_number=turn_number)
 
         rx, ry = pos.rx, pos.ry
 

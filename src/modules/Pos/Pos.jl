@@ -61,21 +61,21 @@ function Base.show(io::IO, p::Pos{T}) where T
 end
 
 function Base.show(io::IO, ::MIME"text/plain", p::Vector{Pos{T}}) where T
-    println(io, join(["[$(@sprintf("%1.8f  ", v.rx))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.px))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.ry))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.py))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.de))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f] ", v.dl))  " for v in p]))
+    println(io, join(["[$(@sprintf("%1.8e  ", v.rx))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.px))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.ry))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.py))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.de))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e] ", v.dl))  " for v in p]))
 end
 
 function Base.show(io::IO, p::Vector{Pos{T}}) where T
-    println(io, join(["[$(@sprintf("%1.8f  ", v.rx))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.px))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.ry))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.py))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f  ", v.de))  " for v in p]))
-    println(io, join([" $(@sprintf("%1.8f] ", v.dl))  " for v in p]))
+    println(io, join(["[$(@sprintf("%1.8e  ", v.rx))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.px))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.ry))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.py))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e  ", v.de))  " for v in p]))
+    println(io, join([" $(@sprintf("%1.8e] ", v.dl))  " for v in p]))
 end
 
 function Base.getindex(p::Pos{T}, index::Int) where T
