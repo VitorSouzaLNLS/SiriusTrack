@@ -12,12 +12,19 @@ mutable struct Pos{Float64}
     py::Float64
     de::Float64
     dl::Float64
+    function Pos(rx::T, px::T, ry::T, py::T, de::T, dl::T) where T
+        new{Float64}(Float64(rx), Float64(px), Float64(ry), Float64(py), Float64(de), Float64(dl))
+    end
+    function Pos(v::Vector{T}) where T
+        new{Float64}(Float64(v[1]), Float64(v[2]), Float64(v[3]), Float64(v[4]), Float64(v[5]), Float64(v[6]))
+    end
+    function Pos(f::T) where T
+        new{Float64}(Float64(f), Float64(f), Float64(f), Float64(f), Float64(f), Float64(f))
+    end
 end
 
-pos(rx::Real, px::Real, ry::Real, py::Real, de::Real, dl::Real) = Pos(Float64(rx), Float64(px), Float64(ry), Float64(py), Float64(de), Float64(dl))
-
 function Base.:+(v1::Pos{T}, v2::Pos{T}) where T
-    return Pos{T}(v1.rx + v2.rx, v1.px + v2.px, v1.ry + v2.ry, v1.py + v2.py, v1.de + v2.de, v1.dl + v2.dl)
+    return Pos(v1.rx + v2.rx, v1.px + v2.px, v1.ry + v2.ry, v1.py + v2.py, v1.de + v2.de, v1.dl + v2.dl)
 end
 
 function Base.:+(m1::Vector{Pos{T}}, m2::Vector{Pos{T}}) where T
@@ -25,7 +32,7 @@ function Base.:+(m1::Vector{Pos{T}}, m2::Vector{Pos{T}}) where T
 end
 
 function Base.:-(v1::Pos{T}, v2::Pos{T}) where T
-    return Pos{T}(v1.rx - v2.rx, v1.px - v2.px, v1.ry - v2.ry, v1.py - v2.py, v1.de - v2.de, v1.dl - v2.dl)
+    return Pos(v1.rx - v2.rx, v1.px - v2.px, v1.ry - v2.ry, v1.py - v2.py, v1.de - v2.de, v1.dl - v2.dl)
 end
 
 function Base.:-(m1::Vector{Pos{T}}, m2::Vector{Pos{T}}) where T
@@ -33,11 +40,11 @@ function Base.:-(m1::Vector{Pos{T}}, m2::Vector{Pos{T}}) where T
 end
 
 function  Base.:*(v::Pos{T}, scalar::S) where {T, S<:Real}
-    return Pos{T}(v.rx * scalar, v.px * scalar, v.ry * scalar, v.py * scalar, v.de * scalar, v.dl * scalar)
+    return Pos(v.rx * scalar, v.px * scalar, v.ry * scalar, v.py * scalar, v.de * scalar, v.dl * scalar)
 end
 
 function  Base.:*(scalar::S, v::Pos{T}) where {T, S<:Real}
-    return Pos{T}(v.rx * scalar, v.px * scalar, v.ry * scalar, v.py * scalar, v.de * scalar, v.dl * scalar)
+    return Pos(v.rx * scalar, v.px * scalar, v.ry * scalar, v.py * scalar, v.de * scalar, v.dl * scalar)
 end
 
 function  Base.:*(scalar::S, m1::Vector{Pos{T}}) where {T, S<:Real}

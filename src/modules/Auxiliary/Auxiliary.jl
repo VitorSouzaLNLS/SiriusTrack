@@ -22,4 +22,4 @@ end
 
 @exported_enum Plane no_plane plane_x plane_y plane_z plane_xy
 
-const string_version::String = "TRACKJL version 1.0"
+const string_version::String = "SiriusTrack version 1.0"

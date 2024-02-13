@@ -37,7 +37,8 @@ using PrecompileTools
 @setup_workload begin
     # flatfile_path::String=(String(@__DIR__))*"/modules/FlatFile/example_flatfile.txt"  # needs review
     @compile_workload begin
-        p = PosModule.pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        v::Vector{Float64} = rand(Float64, 6) * 1e-6
+        p = PosModule.Pos(v)
         m = Models.StorageRing.create_accelerator()
         m.radiation_state = Auxiliary.full
         m.cavity_state = Auxiliary.on

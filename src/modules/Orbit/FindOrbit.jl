@@ -1,6 +1,6 @@
 using ..Auxiliary: BoolState, off, on, full, st_findorbit_not_converged, st_success, st_findorbit_one_turn_matrix_problem, no_plane, pm_bnd_mpole_symplectic4_pass
 using ..Tracking: line_pass, CGAMMA
-using ..PosModule: Pos, pos, Pos_get_max
+using ..PosModule: Pos, Pos_get_max
 using ..AcceleratorModule: Accelerator, find_cav_indices
 using ..Elements: Element
 using ..Constants: light_speed
@@ -8,7 +8,7 @@ using LinearAlgebra
 # using DocumenterTools
 
 # @doc """This function computes the 4-D closed orbit""" 
-function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} = pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), element_offset::Int=1)
+function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} = Pos(0.0), element_offset::Int=1)
     delta = 1e-9              # [m],[rad],[dE/E]
     tolerance = 2.22044604925e-14
     max_nr_iters = 50
@@ -20,10 +20,10 @@ function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
     end
     
     co::Vector{Pos{Float64}} = fill(fixed_point_guess, 7)
-    D::Vector{Pos{Float64}} = fill(pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 7)
-    M::Vector{Pos{Float64}} = fill(pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 6)
-    dco::Pos{Float64} = pos(1.0, 1.0, 1.0, 1.0, 0.0, 0.0)
-    theta::Pos{Float64} = pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    D::Vector{Pos{Float64}} = fill(Pos(0.0), 7)
+    M::Vector{Pos{Float64}} = fill(Pos(0.0), 6)
+    dco::Pos{Float64} = Pos(1.0, 1.0, 1.0, 1.0, 0.0, 0.0)
+    theta::Pos{Float64} = Pos(0.0)
     
     D = matrix6_set_identity_posvec(D, delta=delta)
 
@@ -32,7 +32,7 @@ function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
         co = co + D
         Ri = co[7]
         status = st_success
-        co2::Vector{Pos{Float64}} = fill(pos(0, 0, 0, 0, 0, 0), 7)
+        co2::Vector{Pos{Float64}} = fill(Pos(0.0), 7)
         for i in [1, 2, 3, 4, 7]
             pf, status, _ = line_pass(accelerator, co[i], [leng+1])
             co2[i] = copy(pf[1])
@@ -47,7 +47,7 @@ function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
         M[3] = (co2[3] - Rf) / delta
         M[4] = (co2[4] - Rf) / delta
         b = Rf - Ri
-        M_1 = fill(Pos{Float64}(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 6)
+        M_1 = fill(Pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 6)
         matrix6_set_identity_posvec(M_1)
         M_1 = M_1 - M
         dco = linalg_solve4_posvec(M_1, b)
@@ -67,7 +67,7 @@ function find_orbit4(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
     return closed_orbit, st_success
 end
 
-function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} = pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), element_offset::Int=1)
+function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} = Pos(0.0), element_offset::Int=1)
     
     println(stdout, "\nRunning find_orbit6\n")
 
@@ -95,10 +95,10 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
     println(stdout, "fixed dl = $longitudinal_fixed_point, guess = $fixed_point_guess")
 
     co::Vector{Pos{Float64}} = fill(fixed_point_guess, 7)
-    D::Vector{Pos{Float64}} = fill(pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 7)
-    M::Vector{Pos{Float64}} = fill(pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 6)
-    dco::Pos{Float64} = pos(1.0, 1.0, 1.0, 1.0, 0.0, 0.0)
-    theta::Pos{Float64} = pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    D::Vector{Pos{Float64}} = fill(Pos(0.0), 7)
+    M::Vector{Pos{Float64}} = fill(Pos(0.0), 6)
+    dco::Pos{Float64} = Pos(1.0, 1.0, 1.0, 1.0, 0.0, 0.0)
+    theta::Pos{Float64} = Pos(0.0)
     theta.dl = longitudinal_fixed_point
 
     D = matrix6_set_identity_posvec(D, delta=delta)
@@ -108,7 +108,7 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
         co = co + D
         Ri = co[7]
         status = st_success
-        co2::Vector{Pos{Float64}} = fill(pos(0, 0, 0, 0, 0, 0), 7)
+        co2::Vector{Pos{Float64}} = fill(Pos(0.0), 7)
         for i in [1, 2, 3, 4, 5, 6, 7]
             pf, status, _ = line_pass(accelerator, co[i], [leng+1], turn_number=1)
             co2[i] = copy(pf[1])
@@ -125,7 +125,7 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
         M[5] = (co2[5] - Rf) / delta
         M[6] = (co2[6] - Rf) / delta
         b = Rf - Ri - theta
-        M_1 = fill(Pos{Float64}(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), 6)
+        M_1 = fill(Pos(0.0), 6)
         matrix6_set_identity_posvec(M_1)
         M_1 = M_1 - M
         dco = linalg_solve4_posvec(M_1, b)
@@ -146,9 +146,9 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
 end
 
 function matrix6_set_identity_posvec(D::Vector{Pos{Float64}}; delta::Float64=1.0)
-    M::Vector{Pos{Float64}} = fill(Pos{Float64}(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), length(D))
+    M::Vector{Pos{Float64}} = fill(Pos(0.0), length(D))
     for i in 1:1:6
-        d = pos(0, 0, 0, 0, 0, 0)
+        d = Pos(0.0)
         d[i] = delta
         M[i] = d
     end
@@ -170,7 +170,7 @@ function linalg_solve4_posvec(A::Vector{Pos{Float64}}, B::Pos{Float64})
     x .= m \ b
     
     # Create the solution vector
-    X = pos(x[1], x[2], x[3], x[4], 0.0, 0.0)
+    X = Pos(x[1], x[2], x[3], x[4], 0.0, 0.0)
     
     return X
 end
@@ -190,7 +190,7 @@ function linalg_solve6_posvec(A::Vector{Pos{Float64}}, B::Pos{Float64})
     x .= m \ b
     
     # Create the solution vector
-    X = pos(x[1], x[2], x[3], x[4], x[5], x[6])
+    X = Pos(x[1], x[2], x[3], x[4], x[5], x[6])
     
     return X
 end

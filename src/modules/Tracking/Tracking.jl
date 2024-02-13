@@ -3,10 +3,10 @@
 export element_pass, line_pass, ring_pass
 
 using ..AcceleratorModule: Accelerator
-using ..Auxiliary: no_plane, plane_x, plane_xy, plane_y, pm_bnd_mpole_symplectic4_pass,
-    pm_cavity_pass, pm_corrector_pass, pm_drift_pass, pm_identity_pass,
-    pm_str_mpole_symplectic4_pass, st_particle_lost, st_success, vchamber_ellipse,
-    vchamber_rectangle, vchamber_rhombus, PassMethod, Status
+using ..Auxiliary: PassMethod, Plane, Status, no_plane, on, plane_x, plane_xy, plane_y,
+    pm_bnd_mpole_symplectic4_pass, pm_cavity_pass, pm_corrector_pass, pm_drift_pass,
+    pm_identity_pass, pm_str_mpole_symplectic4_pass, st_particle_lost, st_success,
+    vchamber_ellipse, vchamber_rectangle, vchamber_rhombus, BoolState
 using ..Elements: Element
 using ..PosModule: Pos
 
@@ -53,74 +53,39 @@ function line_pass(
     element_offset::Int = 1,
     turn_number::Int = 0
     )
-    if any([!(1<=i<=length(accelerator.lattice)+1) for i in indices])
-        leng = length(accelerator.lattice)+1
-        error("invalid indices: outside of lattice bounds. The valid indices should stay between 1 and $leng")
+    leng::Float64 = length(accelerator.lattice)
+    if any([!(1<=i<=leng+1) for i in indices])
+        error("invalid indices: outside of lattice bounds. The valid indices should stay between 1 and $(leng+1)")
     end
-    if element_offset > length(accelerator.lattice) || element_offset < 1
-        leng = length(accelerator.lattice)
+    if element_offset > leng || element_offset < 1
         error("invalid indices: outside of lattice bounds. The valid indices should stay between 1 and $leng")
     end
 
-    status = st_success
-    lost_plane = no_plane
-    tracked_pos = Pos{Float64}[]
+    status::Status = st_success
+    lost_plane::Plane = no_plane
+    tracked_pos::Vector{Pos{Float64}} = Pos{Float64}[]
 
-    line = accelerator.lattice
-    nr_elements = length(line)
+    line::Vector{Element} = accelerator.lattice
+    nr_elements::Int = length(line)
 
     # Create vector of booleans to determine when to store position
-    indcs = falses(nr_elements + 1)
+    indcs::Vector{Bool} = falses(nr_elements + 1)
     indcs[indices] .= true
 
-    pos = particle
+    pos::Pos{Float64} = particle
 
     for i in 1:nr_elements
         # Read-only access to element object parameters
-        element = line[element_offset]
+        element::Element = line[element_offset]
 
         # Stores trajectory at entrance of each element
         if indcs[i]
-            push!(tracked_pos, copy(pos))
+            push!(tracked_pos, pos)
         end
 
         status = element_pass(element, pos, accelerator, turn_number=turn_number)
 
-        rx, ry = pos.rx, pos.ry
-
-        # Checks if particle is lost
-        if !isfinite(rx)
-            lost_plane = plane_x
-            status = st_particle_lost
-        end
-
-        if !isfinite(ry)
-            if status != st_particle_lost
-                lost_plane = plane_y
-                status = st_particle_lost
-            else
-                lost_plane = plane_xy
-            end
-        end
-
-        if (status != st_particle_lost) && (accelerator.vchamber_state == on)
-            if element.vchamber == vchamber_rectangle
-                if rx <= element.hmin || rx >= element.hmax
-                    lost_plane = plane_x
-                    status = st_particle_lost
-                end
-                if ry <= element.vmin || ry >= element.vmax
-                    if status != st_particle_lost
-                        lost_plane = plane_y
-                        status = st_particle_lost
-                    else
-                        lost_plane = plane_xy
-                    end
-                end
-            else
-                status, lost_plane = aux_check_lost_pos(element, rx, ry)
-            end
-        end
+        _check_if_lost!(element, pos.rx, pos.ry, status, lost_plane, accelerator.vchamber_state)
 
         if status != st_success
             # Fill the rest of vector with NaNs
@@ -152,13 +117,14 @@ function line_pass(
     element_offset::Int = 1,
     turn_number::Int = 0
     )
-    leng = length(accelerator.lattice)
+    leng::Int = length(accelerator.lattice)
+    idcs::Vector{Int} = Int[]
     if indices == "closed"
-        idcs = [i for i in 1:1:leng+1]
+        idcs = Int[i for i in 1:1:leng+1]
     elseif indices == "open"
-        idcs = [i for i in 1:1:leng]
+        idcs = Int[i for i in 1:1:leng]
     elseif indices == "end"
-        idcs = [leng+1]
+        idcs = Int[leng+1]
     else
         error("invalid indices: should be a String:(closed, open, end) or a Vector{Int})")
     end
@@ -199,27 +165,64 @@ function ring_pass(accelerator::Accelerator,
     return v, st, lostplane
 end
 
-function aux_check_lost_pos(element::Element, rx::Float64, ry::Float64)
-    lx::Float64 = (element.hmax - element.hmin) / 2
-    ly::Float64 = (element.vmax - element.vmin) / 2
-    xc::Float64 = (element.hmax + element.hmin) / 2
-    yc::Float64 = (element.vmax + element.vmin) / 2
-    xn::Float64 = abs((rx - xc) / lx)
-    yn::Float64 = abs((ry - yc) / ly)
-    amplitude::Float64 = 0.0
+function _check_if_lost!(element::Element, x::Float64, y::Float64, status::Status, lost_plane::Plane, vchamber_state::BoolState)
 
-    if element.vchamber == vchamber_rhombus
-        amplitude = xn + yn
-    elseif element.vchamber == vchamber_ellipse
-        amplitude = xn^2 + yn^2
-    else
-        amplitude = xn^Int(element.vchamber) + yn^Int(element.vchamber)
+    if !isfinite(x)
+        lost_plane = plane_x
+        status = st_particle_lost
     end
 
-    if amplitude > 1
-        return st_particle_lost, plane_xy
-    else
-        return st_success, no_plane
+    if !isfinite(y)
+        if status != st_particle_lost
+            lost_plane = plane_y
+            status = st_particle_lost
+        else
+            lost_plane = plane_xy
+        end
+    end
+
+    if (status != st_particle_lost) && (vchamber_state == on)
+        _aux_check_if_lost!(element, x, y, status, lost_plane)
     end
 end
 
+function _aux_check_if_lost!(element::Element, x::Float64, y::Float64, status::Status, lost_plane::Plane)
+    if element.vchamber == vchamber_rectangle
+        if x <= element.hmin || x >= element.hmax
+            lost_plane = plane_x
+            status = st_particle_lost
+        end
+        if y <= element.vmin || y >= element.vmax
+            if status != st_particle_lost
+                lost_plane = plane_y
+                status = st_particle_lost
+            else
+                lost_plane = plane_xy
+            end
+        end
+    else
+        lx::Float64 = (element.hmax - element.hmin) / 2
+        ly::Float64 = (element.vmax - element.vmin) / 2
+        xc::Float64 = (element.hmax + element.hmin) / 2
+        yc::Float64 = (element.vmax + element.vmin) / 2
+        xn::Float64 = abs((x - xc) / lx)
+        yn::Float64 = abs((y - yc) / ly)
+        amplitude::Float64 = 0.0
+
+        if element.vchamber == vchamber_rhombus
+            amplitude = xn + yn
+        elseif element.vchamber == vchamber_ellipse
+            amplitude = xn^2 + yn^2
+        else
+            amplitude = xn^Int(element.vchamber) + yn^Int(element.vchamber)
+        end
+
+        if amplitude > 1
+            status = st_particle_lost
+            lost_plane = plane_xy
+        else
+            status = st_success
+            lost_plane = no_plane
+        end
+    end
+end
