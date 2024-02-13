@@ -198,7 +198,7 @@ function dipole_b1(m_accep_fam_name::String; simplified::Bool=false)
 
     # --- add source point marker to half-model ---
     imodel = model[end:-1:1]
-    angles = Float64[haskey(elem.properties, :angle) ? elem.properties[:angle] : 0.0 for elem in imodel]
+    angles = Float64[elem.angle for elem in imodel]
     angles_cumsum = cumsum(angles)
     src_idx = argmin(abs.(angles_cumsum .- src_point_angle))
     fam_name, element_type = segtypes["B1_SRC"]
@@ -367,13 +367,13 @@ function quadrupole_q14(fam_name::String, strength::Float64; simplified::Bool=fa
     end
     PolyA = PolyB * 0.0 
     element = quadrupole(fam_name, 2*segmodel[i][1+1], PolyB[2])
-    element.properties[:polynom_a] = copy(PolyA)
-    element.properties[:polynom_b] = copy(PolyB)
+    element.polynom_a = copy(PolyA)
+    element.polynom_b = copy(PolyB)
     push!(model, element)
 
     if simplified
-        model[1].properties[:polynom_a] = copy(model[1].properties[:polynom_a][1:3])
-        model[1].properties[:polynom_b] = copy(model[1].properties[:polynom_b][1:3])
+        model[1].polynom_a = copy(model[1].polynom_a[1:3])
+        model[1].polynom_b = copy(model[1].polynom_b[1:3])
     end
 
     return model
@@ -415,13 +415,13 @@ function quadrupole_q20(fam_name::String, strength::Float64; simplified::Bool=fa
     end
     PolyA = PolyB * 0.0 
     element = quadrupole(fam_name, 2*segmodel[i][1+1], PolyB[2])
-    element.properties[:polynom_a] = copy(PolyA)
-    element.properties[:polynom_b] = copy(PolyB)
+    element.polynom_a = copy(PolyA)
+    element.polynom_b = copy(PolyB)
     push!(model, element)
 
     if simplified
-        model[1].properties[:polynom_a] = copy(model[1].properties[:polynom_a][1:3])
-        model[1].properties[:polynom_b] = copy(model[1].properties[:polynom_b][1:3])
+        model[1].polynom_a = copy(model[1].polynom_a[1:3])
+        model[1].polynom_b = copy(model[1].polynom_b[1:3])
     end
 
     return model
@@ -463,13 +463,13 @@ function quadrupole_q30(fam_name::String, strength::Float64; simplified::Bool=fa
     end
     PolyA = PolyB * 0.0 
     element = quadrupole(fam_name, 2*segmodel[i][1+1], PolyB[2])
-    element.properties[:polynom_a] = copy(PolyA)
-    element.properties[:polynom_b] = copy(PolyB)
+    element.polynom_a = copy(PolyA)
+    element.polynom_b = copy(PolyB)
     push!(model, element)
 
     if simplified
-        model[1].properties[:polynom_a] = copy(model[1].properties[:polynom_a][1:3])
-        model[1].properties[:polynom_b] = copy(model[1].properties[:polynom_b][1:3])
+        model[1].polynom_a = copy(model[1].polynom_a[1:3])
+        model[1].polynom_b = copy(model[1].polynom_b[1:3])
     end
 
     return model

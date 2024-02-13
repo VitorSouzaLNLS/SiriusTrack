@@ -172,22 +172,21 @@ function pm_identity_pass!(pos::Pos{Float64}, element::Element)
 end
 
 function pm_drift_pass!(pos::Pos{Float64}, element::Element) 
-    _drift(pos, element.properties[:length])
+    _drift(pos, element.length)
     return st_success
 end
 
 function pm_str_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelerator) 
-    # global_2_local(pos, elem)
-    # steps = haskey(elem.properties, :nr_steps) ? elem.properties[:nr_steps] : 20
-    steps::Int = elem.properties[:nr_steps]
 
-    sl::Float64 = elem.properties[:length] / steps
+    steps::Int = elem.nr_steps
+
+    sl::Float64 = elem.length / steps
     l1::Float64 = sl * DRIFT1
     l2::Float64 = sl * DRIFT2
     k1::Float64 = sl * KICK1
     k2::Float64 = sl * KICK2
-    polynom_b::Vector{Float64} = elem.properties[:polynom_b]
-    polynom_a::Vector{Float64} = elem.properties[:polynom_a]
+    polynom_b::Vector{Float64} = elem.polynom_b
+    polynom_a::Vector{Float64} = elem.polynom_a
     rad_const::Float64 = 0.0
     qexcit_const::Float64 = 0.0
 
@@ -209,26 +208,22 @@ function pm_str_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
         _drift(pos, l1)
     end
 
-    # local_2_global(pos, elem)
     return st_success
 end
 
 function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelerator) 
-    # if !haskey(elem.properties, :angle)
-    #     return pm_str_mpole_symplectic4_pass!(pos, elem, accelerator)
-    # end
-    #steps = haskey(elem.properties, :nr_steps) ? elem.properties[:nr_steps] : 20
-    steps::Int = elem.properties[:nr_steps]
 
-    sl   ::Float64 = elem.properties[:length] / Float64(steps)
+    steps::Int = elem.nr_steps
+
+    sl   ::Float64 = elem.length / Float64(steps)
     l1   ::Float64 = sl * DRIFT1
     l2   ::Float64 = sl * DRIFT2
     k1   ::Float64 = sl * KICK1
     k2   ::Float64 = sl * KICK2
-    irho ::Float64 = elem.properties[:angle] / elem.properties[:length]
+    irho ::Float64 = elem.angle / elem.length
 
-    polynom_b::Vector{Float64} = elem.properties[:polynom_b]
-    polynom_a::Vector{Float64} = elem.properties[:polynom_a]
+    polynom_b::Vector{Float64} = elem.polynom_b
+    polynom_a::Vector{Float64} = elem.polynom_a
     
     rad_const::Float64 = 0.0
     qexcit_const::Float64 = 0.0
@@ -241,19 +236,12 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
-    # ang_in = haskey(elem.properties, :angle_in) ? elem.properties[:angle_in] : 0.0
-    # ang_out = haskey(elem.properties, :angle_out) ? elem.properties[:angle_out] : 0.0
-    # fint_in = haskey(elem.properties, :fint_in) ? elem.properties[:fint_in] : 0.0
-    # fint_out = haskey(elem.properties, :fint_out) ? elem.properties[:fint_out] : 0.0
-    # gap = haskey(elem.properties, :gap) ? elem.properties[:gap] : 0.0
-    ang_in   ::Float64 = elem.properties[:angle_in]
-    ang_out  ::Float64 = elem.properties[:angle_out]
-    fint_in  ::Float64 = elem.properties[:fint_in]
-    fint_out ::Float64 = elem.properties[:fint_out]
-    gap      ::Float64 = elem.properties[:gap]
+    ang_in   ::Float64 = elem.angle_in
+    ang_out  ::Float64 = elem.angle_out
+    fint_in  ::Float64 = elem.fint_in
+    fint_out ::Float64 = elem.fint_out
+    gap      ::Float64 = elem.gap
 
-
-    #global_2_local(pos, elem)
     _edge_fringe(pos, irho, ang_in, fint_in, gap)
 
     for i in 1:1:Int(steps)
@@ -267,17 +255,16 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
     end
 
     _edge_fringe(pos, irho, ang_out, fint_out, gap)
-    #local_2_global(pos, elem)
 
     return st_success
 end
 
 function pm_corrector_pass!(pos::Pos{Float64}, elem::Element) 
-    #global_2_local(pos, elem)
-    xkick::Float64 = elem.properties[:hkick]
-    ykick::Float64 = elem.properties[:vkick]
 
-    if elem.properties[:length] == 0
+    xkick::Float64 = elem.hkick
+    ykick::Float64 = elem.vkick
+
+    if elem.length == 0
         pos.px += hkick
         pos.py += vkick
     else
@@ -285,7 +272,7 @@ function pm_corrector_pass!(pos::Pos{Float64}, elem::Element)
         py::Float64 = pos.py
         de = pos.de
         pnorm::Float64 = 1 / (1 + de)
-        norml::Float64 = elem.properties[:length] * pnorm
+        norml::Float64 = elem.length * pnorm
         pos.dl += norml * pnorm * 0.5 * (xkick * xkick/3.0 + ykick * ykick/3.0 + px*px + py*py + px * xkick + py * ykick)
         pos.rx += norml * (px + 0.5 * xkick)
         pos.px += xkick
@@ -293,7 +280,6 @@ function pm_corrector_pass!(pos::Pos{Float64}, elem::Element)
         pos.py += ykick
     end
 
-    #local_2_global(pos, elem)
     return st_success
 end
 
@@ -302,10 +288,9 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
         return pm_drift_pass!(pos, elem)
     end
 
-    #global_2_local(pos, elem)
-    nv::Float64 = elem.properties[:voltage] / accelerator.energy
-    philag::Float64 = elem.properties[:phase_lag]
-    frf::Float64 = elem.properties[:frequency]
+    nv::Float64 = elem.voltage / accelerator.energy
+    philag::Float64 = elem.phase_lag
+    frf::Float64 = elem.frequency
     harmonic_number::Int = accelerator.harmonic_number
     velocity::Float64 = accelerator.velocity
     # velocity = light_speed
@@ -313,7 +298,7 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
     T0::Float64 = L0 / velocity
     #println(stdout,"\nfactor = ",harmonic_number/frf - T0)
 
-    if elem.properties[:length] == 0
+    if elem.length == 0
         pos.de += -nv * sin((TWOPI * frf * ((pos.dl/velocity) - ((harmonic_number/frf - T0)*turn_number))) - philag)
         #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
     else
@@ -323,7 +308,7 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
 
         # Drift half length
         pnorm::Float64 = 1 / (1 + de)
-        norml::Float64 = (0.5 * elem.properties[:length]) * pnorm
+        norml::Float64 = (0.5 * elem.length) * pnorm
         pos.rx += norml * px
         pos.ry += norml * py
         pos.dl += 0.5 * norml * pnorm * (px*px + py*py)
@@ -334,12 +319,11 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
 
         # Drift half length
         pnorm = 1.0 / (1.0 + de)
-        norml = (0.5 * elem.properties[:length]) * pnorm
+        norml = (0.5 * elem.length) * pnorm
         pos.rx += norml * px
         pos.ry += norml * py
         pos.dl += 0.5 * norml * pnorm * (px*px + py*py)
     end
 
-    #local_2_global(pos, elem)
     return st_success
 end

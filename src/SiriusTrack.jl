@@ -14,7 +14,7 @@ include("modules/Accelerator/acceleratorModule.jl")
 
 include("modules/Tracking/trackingModule.jl")
 
-include("modules/FlatFile/flatfileModule.jl")
+# include("modules/FlatFile/flatfileModule.jl")  # needs review
 
 include("modules/Models/modelsModule.jl")
 
@@ -26,7 +26,7 @@ using .Auxiliary
 using .Elements
 using .AcceleratorModule
 using .Tracking
-using .FlatFile
+# using .FlatFile  # needs review
 using .Models
 using .Orbit
 
@@ -35,7 +35,7 @@ export Constants
 using PrecompileTools
 
 @setup_workload begin
-    flatfile_path::String=(String(@__DIR__))*"/modules/FlatFile/example_flatfile.txt"
+    # flatfile_path::String=(String(@__DIR__))*"/modules/FlatFile/example_flatfile.txt"  # needs review
     @compile_workload begin
         p = PosModule.pos(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         m = Models.StorageRing.create_accelerator()
@@ -43,7 +43,7 @@ using PrecompileTools
         m.cavity_state = Auxiliary.on
         m.vchamber_state = Auxiliary.on
         pf, st, lf = Tracking.ring_pass(m, p, 1)
-        mff = FlatFile.read_flatfile(flatfile_path)
+        # mff = FlatFile.read_flatfile(flatfile_path)  # needs review
         Orbit.find_orbit4(m)
         Orbit.find_orbit6(m)
     end
