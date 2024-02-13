@@ -6,13 +6,13 @@ using ..Auxiliary
 using ..Constants: electron_rest_energy_eV, light_speed
 using ..Elements: Element
 
-#export Accelerator, Accelerator!, find_spos, find_indices
+export Accelerator, find_spos, find_indices
 
 mutable struct Accelerator
     energy::Float64
-    cavity_state::Auxiliary.BoolState
-    radiation_state::Auxiliary.BoolState
-    vchamber_state::Auxiliary.BoolState
+    cavity_state::BoolState
+    radiation_state::BoolState
+    vchamber_state::BoolState
     harmonic_number::Int
     lattice::Vector{Element}
     lattice_version::String
@@ -21,16 +21,19 @@ mutable struct Accelerator
     beta_factor::Float64
     gamma_factor::Float64
     brho::Float64
-end    
 
-function Accelerator!(energy::Real)
-    gamma = energy/electron_rest_energy_eV
-    beta = sqrt(1 - (1 / gamma^2))
-    velocity = beta * light_speed
-    brho = beta * energy / light_speed
-    accelerator = Accelerator(energy, Auxiliary.off, Auxiliary.off, Auxiliary.off, 0, Element[], "", 0.0, velocity, beta, gamma, brho)
-    return accelerator
-end
+    function Accelerator(energy::Float64)
+        if energy < electron_rest_energy_eV
+            @warn("The energy set ($energy) below the minimum (electron rest energy) $electron_rest_energy_eV [eV]")
+            energy = electron_rest_energy_eV
+        end
+        gamma = energy/electron_rest_energy_eV
+        beta = sqrt(1 - (1 / gamma^2))
+        velocity = beta * light_speed
+        brho = beta * energy / light_speed
+        return new(energy, Auxiliary.off, Auxiliary.off, Auxiliary.off, 0, Element[], "", 0.0, velocity, beta, gamma, brho)
+    end
+end    
 
 function isequal(acc1::Accelerator, acc2::Accelerator)
     if (acc1.energy != acc2.energy) return false end
@@ -52,11 +55,11 @@ function update_cavity(accelerator::Accelerator)
     for index in cavity_indices
         cav = accelerator.lattice[index]
         if accelerator.cavity_state == on
-            cav.properties[:pass_method] = Auxiliary.pm_cavity_pass
+            cav.pass_method = Auxiliary.pm_cavity_pass
         elseif accelerator.cavity_state == off && cav.length == 0.0
-            cav.properties[:pass_method] = Auxiliary.pm_identity_pass
+            cav.pass_method = Auxiliary.pm_identity_pass
         else
-            cav.properties[:pass_method] = Auxiliary.pm_drift_pass
+            cav.pass_method = Auxiliary.pm_drift_pass
         end
     end
 end
@@ -66,10 +69,10 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
         adjust_beam_parameters(accelerator, :energy, value)    
     
     elseif symbol == :cavity_state
-        if isa(value, Auxiliary.BoolState) || isa(value, Int) || isa(value, Bool)
+        if isa(value, BoolState) || isa(value, Int) || isa(value, Bool)
             val = Int(value)
             if 0 <= val <= 1
-                setfield!(accelerator, :cavity_state, Auxiliary.BoolState(val))
+                setfield!(accelerator, :cavity_state, BoolState(val))
                 update_cavity(accelerator)
             else
                 error("cavity_state should be 0(cavity off) or 1(cavity on)")
@@ -77,18 +80,24 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
         end
     
     elseif symbol == :radiation_state
-        if isa(value, Auxiliary.BoolState) || isa(value, Int) || isa(value, Bool)
+        if isa(value, BoolState) || isa(value, Int) || isa(value, Bool)
             val = Int(value)
             if 0 <= val <= 2
-                setfield!(accelerator, :radiation_state, Auxiliary.BoolState(val))
+                setfield!(accelerator, :radiation_state, BoolState(val))
             else
                 error("radiation_state should be 0(radiation off), 1(radiation dumping) or 2(radiation full)")
             end
         end
     
     elseif symbol == :vchamber_state
-        setfield!(accelerator, :vchamber_state, value)
-    
+        if isa(value, BoolState) || isa(value, Int) || isa(value, Bool)
+            val = Int(value)
+            if 0 <= val <= 2
+                setfield!(accelerator, :vchamber_state, BoolState(val))
+            else
+                error("vchamber_state should be: (0, off, false) or (1, on, true)")
+            end
+        end
     elseif symbol == :harmonic_number
         setfield!(accelerator, :harmonic_number, value)
 
@@ -120,7 +129,7 @@ function setproperty!(accelerator::Accelerator, symbol::Symbol, value)
 end
 
 function find_spos(accelerator::Accelerator; indices::T="open") where T<:Union{String, Vector{Int}}
-    spos::Vector{Float64} = append!([0.0], [elem.properties[:length] for elem in accelerator.lattice])
+    spos::Vector{Float64} = append!([0.0], [elem.length for elem in accelerator.lattice])
     spos = cumsum(spos)
     if isa(indices, String)
         if indices == "open"
@@ -143,11 +152,9 @@ function find_spos(accelerator::Accelerator; indices::T="open") where T<:Union{S
 end
 
 function find_indices(accelerator::Accelerator, property::String, value::Union{Real, String, Auxiliary.PassMethod})
-    indices = Int[]
+    indices::Vector{Int} = Int[]
     for (idx, element) in enumerate(accelerator.lattice)
-        if property == "fam_name" && element.fam_name == value
-            push!(indices, idx)
-        elseif haskey(element.properties, Symbol(property)) && element.properties[Symbol(property)] == value
+        if getfield(element, Symbol(property)) == value
             push!(indices, idx)
         end
     end
@@ -155,9 +162,9 @@ function find_indices(accelerator::Accelerator, property::String, value::Union{R
 end
 
 function find_cav_indices(accelerator::Accelerator)
-    idcs = Int[]
+    idcs::Vector{Int} = Int[]
     for i in 1:1:length(accelerator.lattice) 
-        if haskey(accelerator.lattice[i].properties, :frequency)
+        if accelerator.lattice[i].frequency != 0.0
             push!(idcs, i)
         end
     end

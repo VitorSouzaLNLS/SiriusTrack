@@ -85,11 +85,11 @@ function find_orbit6(accelerator::Accelerator; fixed_point_guess::Pos{Float64} =
 
     if true
         u0 = get_U0(accelerator)
-        voltage = cav.properties[:voltage]
+        voltage = cav.voltage
         fixed_point_guess[6] = -accelerator.length/(2*pi*accelerator.harmonic_number) * asin(u0/voltage)
     end
 
-    frf::Float64 = cav.properties[:frequency]
+    frf::Float64 = cav.frequency
     longitudinal_fixed_point::Float64 = (accelerator.velocity * accelerator.harmonic_number / frf) - accelerator.length
 
     println(stdout, "fixed dl = $longitudinal_fixed_point, guess = $fixed_point_guess")
@@ -199,9 +199,9 @@ function get_U0(accelerator::Accelerator)
     theta = []
     leng = []
     for e in accelerator.lattice
-        if e.properties[:pass_method] == pm_bnd_mpole_symplectic4_pass
-            push!(theta, e.properties[:angle])
-            push!(leng, e.properties[:length])
+        if e.pass_method == pm_bnd_mpole_symplectic4_pass
+            push!(theta, e.angle)
+            push!(leng, e.length)
         end
     end
     coef = CGAMMA*1e9/2/pi * (accelerator.energy/1e9)^4

@@ -1,19 +1,17 @@
 # __precompile__()
 
 using ..Elements: Element, marker, drift, sextupole, rfcavity, lattice_flatten!
-using ..AcceleratorModule: Accelerator, Accelerator!, find_indices, lattice_shift!, find_spos
+using ..AcceleratorModule: Accelerator, find_indices, lattice_shift!, find_spos
 using ..Constants: light_speed
-using ..Auxiliary
+using ..Auxiliary: VChamberShape, vchamber_ellipse, vchamber_rectangle
 
 include("segmented_models.jl")
-
-export create_lattice
 
 const lattice_symmetry::Int = 5
 const harmonic_number::Int = 864
 const energy::Float64 = 3e9  # [eV]
 
-function create_lattice(optics_mode::String, simplified, ids)
+function _create_lattice(optics_mode::String, simplified, ids)
     """Return lattice object."""
     # -- selection of optics mode --
     strengths = get_optics_mode(optics_mode=optics_mode)
@@ -621,7 +619,7 @@ function create_lattice(optics_mode::String, simplified, ids)
     anel = lattice_flatten!(anel)
 
     # -- create the Accelerator
-    the_ring = Accelerator!(energy)
+    the_ring = Accelerator(energy)
     the_ring.lattice = anel
     the_ring.harmonic_number = harmonic_number
     setfield!(the_ring, :lattice_version, "SI_V25_04_v1.18.0_julia")
@@ -832,8 +830,8 @@ function set_rf_frequency!(accelerator::Accelerator)
     idx = find_indices(accelerator, "fam_name", "SRFCav")
     for i in idx
         e = accelerator.lattice[i]
-        e.properties[:frequency] = freq
-        e.properties[:phase_lag] = phase_lag
+        e.frequency = freq
+        e.phase_lag = phase_lag
     end
 end
 
@@ -841,17 +839,19 @@ function set_num_integ_steps(accelerator::Accelerator)
     len_bends = 0.050
     len_quads = 0.015
     len_sexts = 0.015
+    nr_steps::Int = 1
+    
     for i in eachindex(accelerator.lattice)
         elem = accelerator.lattice[i]
-        if haskey(elem.properties, :angle) && !iszero(elem.properties[:angle])
-            nr_steps = ceil(Int, elem.properties[:length] / len_bends)
-            elem.properties[:nr_steps] = nr_steps
-        elseif haskey(elem.properties, :polynom_b) && !iszero(elem.properties[:polynom_b][3])
-            nr_steps = ceil(Int, elem.properties[:length] / len_sexts)
-            elem.properties[:nr_steps] = nr_steps
-        elseif haskey(elem.properties, :polynom_b) && !iszero(elem.properties[:polynom_b][2]) || elem.fam_name in ["FC1", "FC2", "InjDpKckr", "InjNLKckr"]
-            nr_steps = ceil(Int, elem.properties[:length] / len_quads)
-            elem.properties[:nr_steps] = nr_steps
+        if !iszero(elem.angle)
+            nr_steps = ceil(Int, elem.length / len_bends)
+            elem.nr_steps = nr_steps
+        elseif length(elem.polynom_b) >= 3 && !iszero(elem.polynom_b[3])
+            nr_steps = ceil(Int, elem.length / len_sexts)
+            elem.nr_steps = nr_steps
+        elseif length(elem.polynom_b) >= 2 && !iszero(elem.polynom_b[2]) || elem.fam_name in ["FC1", "FC2", "InjDpKckr", "InjNLKckr"]
+            nr_steps = ceil(Int, elem.length / len_quads)
+            elem.nr_steps = nr_steps
         end
     end
 end
@@ -865,36 +865,36 @@ function set_vacuum_chamber(acc::Accelerator, ids_vchamber::Any)
 
     for i in eachindex(acc.lattice)
         e = acc.lattice[i]
-        e.properties[:vchamber] =  Auxiliary.vchamber_ellipse
-        e.properties[:hmin], e.properties[:hmax], e.properties[:vmin], e.properties[:vmax] = other_vchamber
+        e.vchamber = vchamber_ellipse
+        e.hmin, e.hmax, e.vmin, e.vmax = other_vchamber
     end
 
     scrapvc = find_indices(acc, "fam_name", "SVVC")
     for i in scrapvc[1]:scrapvc[2]
         e = acc.lattice[i]
-        e.properties[:vchamber] =  Auxiliary.vchamber_ellipse
-        e.properties[:hmin], e.properties[:hmax], e.properties[:vmin], e.properties[:vmax] = scrapv_vchamber
+        e.vchamber = vchamber_ellipse
+        e.hmin, e.hmax, e.vmin, e.vmax = scrapv_vchamber
     end
     scrapvc = find_indices(acc, "fam_name", "SHVC")
     for i in scrapvc[1]:scrapvc[2]
         e = acc.lattice[i]
-        e.properties[:vchamber] =  Auxiliary.vchamber_rectangle
-        e.properties[:hmin], e.properties[:hmax], e.properties[:vmin], e.properties[:vmax] = scraph_vchamber
+        e.vchamber = vchamber_rectangle
+        e.hmin, e.hmax, e.vmin, e.vmax = scraph_vchamber
     end
 
     injva = find_indices(acc, "fam_name", "InjVCb")
     for i in injva[1]:injva[2]
         e = acc.lattice[i]
-        e.properties[:vchamber] =  Auxiliary.vchamber_rectangle
-        e.properties[:hmin], e.properties[:hmax], e.properties[:vmin], e.properties[:vmax] = injb_vchamber
+        e.vchamber = vchamber_rectangle
+        e.hmin, e.hmax, e.vmin, e.vmax = injb_vchamber
     end
 
     injva = find_indices(acc, "fam_name", "InjVCs")
     injva = vcat(injva[end]:length(acc.lattice), 1:injva[1])
     for i in injva
         e = acc.lattice[i]
-        e.properties[:vchamber] =  Auxiliary.vchamber_rectangle
-        e.properties[:hmin], e.properties[:hmax], e.properties[:vmin], e.properties[:vmax] = injs_vchamber
+        e.vchamber = vchamber_rectangle
+        e.hmin, e.hmax, e.vmin, e.vmax = injs_vchamber
     end
 
     set_vacuum_chamber_bc(acc)
@@ -910,8 +910,8 @@ function set_vacuum_chamber(acc::Accelerator, ids_vchamber::Any)
         ss_idx = parse(Int, subsec[3:4]) - 3
         for i in id_init[ss_idx]:id_end[ss_idx]
             e = acc.lattice[i]
-            e.properties[:vchamber] = vch_shape
-            e.properties[:hmin], e.properties[:hmax], e.properties[:vmin], e.properties[:vmax] = vch_dim
+            e.vchamber = VChamberShape(vch_shape)
+            e.hmin, e.hmax, e.vmin, e.vmax = vch_dim
         end
     end
 end
@@ -926,10 +926,10 @@ function set_vacuum_chamber_bc(acc::Accelerator)
     radius2 = 0.012
 
     function set_vchamber_transition(elem, dspos, sign)
-        elem.properties[:vchamber] = Auxiliary.vchamber_ellipse
+        elem.vchamber = vchamber_ellipse
         radius = radius1 + (radius2 - radius1)*(dspos - sign * len1/2)/len2
-        elem.properties[:hmin], elem.properties[:hmax] = -radius, radius
-        elem.properties[:vmin], elem.properties[:vmax] = -radius, radius
+        elem.hmin, elem.hmax = -radius, radius
+        elem.vmin, elem.vmax = -radius, radius
     end
 
     function loop_vchamber(mci, upstream)

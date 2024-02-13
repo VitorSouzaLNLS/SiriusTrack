@@ -19,7 +19,7 @@ function element_pass(
     )
     status::Status = st_success
 
-    pass_method::PassMethod = element.properties[:pass_method]
+    pass_method::PassMethod = element.pass_method
 
     if pass_method == pm_identity_pass
         status = pm_identity_pass!(particle, element)
@@ -104,12 +104,12 @@ function line_pass(
         end
 
         if (status != st_particle_lost) && (accelerator.vchamber_state == on)
-            if element.properties[:vchamber] == vchamber_rectangle
-                if rx <= element.properties[:hmin] || rx >= element.properties[:hmax]
+            if element.vchamber == vchamber_rectangle
+                if rx <= element.hmin || rx >= element.hmax
                     lost_plane = plane_x
                     status = st_particle_lost
                 end
-                if ry <= element.properties[:vmin] || ry >= element.properties[:vmax]
+                if ry <= element.vmin || ry >= element.vmax
                     if status != st_particle_lost
                         lost_plane = plane_y
                         status = st_particle_lost
@@ -200,19 +200,20 @@ function ring_pass(accelerator::Accelerator,
 end
 
 function aux_check_lost_pos(element::Element, rx::Float64, ry::Float64)
-    lx = (element.properties[:hmax] - element.properties[:hmin]) / 2
-    ly = (element.properties[:vmax] - element.properties[:vmin]) / 2
-    xc = (element.properties[:hmax] + element.properties[:hmin]) / 2
-    yc = (element.properties[:vmax] + element.properties[:vmin]) / 2
-    xn = abs((rx - xc) / lx)
-    yn = abs((ry - yc) / ly)
-    
-    if element.properties[:vchamber] == vchamber_rhombus
+    lx::Float64 = (element.hmax - element.hmin) / 2
+    ly::Float64 = (element.vmax - element.vmin) / 2
+    xc::Float64 = (element.hmax + element.hmin) / 2
+    yc::Float64 = (element.vmax + element.vmin) / 2
+    xn::Float64 = abs((rx - xc) / lx)
+    yn::Float64 = abs((ry - yc) / ly)
+    amplitude::Float64 = 0.0
+
+    if element.vchamber == vchamber_rhombus
         amplitude = xn + yn
-    elseif element.properties[:vchamber] == vchamber_ellipse
+    elseif element.vchamber == vchamber_ellipse
         amplitude = xn^2 + yn^2
     else
-        amplitude = xn^Int(element.properties[:vchamber]) + yn^Int(element.properties[:vchamber])
+        amplitude = xn^Int(element.vchamber) + yn^Int(element.vchamber)
     end
 
     if amplitude > 1
