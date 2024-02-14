@@ -103,6 +103,10 @@ function Base.getindex(p::Pos{T}, index::Int) where T
     end
 end
 
+function Base.getindex(p::Pos{T}, ::Colon) where T
+   return Float64[p.rx, p.px, p.ry, p.py, p.de, p.dl]
+end
+
 function Base.setindex!(p::Pos{T}, value::Real, index::Int) where T
     if index == 1
         p.rx = Float64(value)
