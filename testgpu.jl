@@ -127,33 +127,15 @@ end
 
 const l0 = 3f0
 
-p = CUDA.fill(1f0, (6, dim))
+# p = CUDA.fill(1f0, (6, dim))
 
-CUDA.@time CUDA.@sync @cuda(
-    threads = nthreads,
-    blocks = nblocks,
-    drift_gpu_kernel!(p, l0)
-)
-
-p
-
-# function drift_gpu_kernel!(rx, px, ry, py, de, dl, leng)
-#     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-#     if i <= length(rx)
-#         #@inbounds z[i] = a * x[i] + y[i]
-#         @inbounds pnorm = 1f0 / (1f0 + de[i])
-#         norml = leng * pnorm
-#         @inbounds rx[i] += norml #(norml[i] * px[i])
-#         @inbounds ry[i] += (norml * py[i])
-#         @inbounds dl[i] += (0.5f0 * norml * pnorm * (px[i]^2 + py[i]^2))
-#     end
-#     return nothing
-# end
-# CUDA.@sync @cuda(
+# CUDA.@time CUDA.@sync @cuda(
 #     threads = nthreads,
 #     blocks = nblocks,
-#     drift_gpu_kernel!(rx,px,ry,py,de,dl,l0)
+#     drift_gpu_kernel!(p, l0)
 # )
+
+
 # Generate random data using CUDA.rand
 x = CUDA.rand(Float32, (6, dim))
 
