@@ -1,7 +1,11 @@
 
 using CUDA
 
-const dim = 1
+versioninfo()
+
+CUDA.versioninfo()
+
+const dim = 100_000
 const DRIFT1::Float64  =  0.6756035959798286638e00
 const DRIFT2::Float64  = -0.1756035959798286639e00
 const KICK1 ::Float64  =  0.1351207191959657328e01
@@ -29,10 +33,10 @@ const CU        ::Float64 = 1.323094366892892     # 55/(24*sqrt(3)) factor
 const CQEXT     ::Float64 = sqrt(CU * CER * reduced_planck_constant * electron_charge * light_speed) * electron_charge * electron_charge / ((electron_mass*light_speed*light_speed)^3) #  for quant. diff. kick
 
 
-nthreads = CUDA.attribute(
+nthreads = Int(CUDA.attribute(
     device(),
     CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK
-)
+) / 2)
 
 nblocks = cld(dim, nthreads)
 
@@ -43,11 +47,11 @@ nblocks = cld(dim, nthreads)
 function _gpu_drift(V, length)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if i <= size(V)[2] # dimension of V is (6, nr_particles) -> size(V)[2] = nr_particles
-        pnorm = 1f0 / (1f0 + V[5,i])
+        pnorm = 1e0 / (1e0 + V[5,i])
         norml = length * pnorm
         @inbounds V[1,i] += (norml * V[2,i])
         @inbounds V[3,i] += (norml * V[4,i])
-        @inbounds V[6,i] += (0.5f0 * norml * pnorm * (V[2,i]^2 + V[4,i]^2))
+        @inbounds V[6,i] += (0.5e0 * norml * pnorm * (V[2,i]^2 + V[4,i]^2))
     end
     return nothing
 end
@@ -55,7 +59,7 @@ end
 # x and y are Floats (32)
 # polynom_a and polynom_b are CuArrays
 function _gpu_calcpolykick(x, y, polynom_a, polynom_b)
-    real_sum, imag_sum = 0f0, 0f0
+    real_sum, imag_sum = 0e0, 0e0
     n = min(length(polynom_a), length(polynom_b))
     if n != 0
         for j in n-1:-1:1
@@ -68,8 +72,8 @@ function _gpu_calcpolykick(x, y, polynom_a, polynom_b)
 end
 
 # bx, by, px, py and curv are Floats (32)
-function _gpu_b2_perp(bx, by, px, py, curv=1f0)
-    b2p = 0f0
+function _gpu_b2_perp(bx, by, px, py, curv=1e0)
+    b2p = 0e0
     curv2 = curv^2
     v_norm2_inv = curv2 + px^2 + py^2
     b2p = by^2 + bx^2
@@ -82,27 +86,27 @@ end
 # V is a CuArray dim = (6, nr_particles)
 # length, rad_const and qexcit_const are Floats (32)
 # polynom_a and polynom_b are CuArrays
-function _gpu_strthinkick(V, length, polynom_a, polynom_b, rad_const=0f0, qexit_const=0f0)
+function _gpu_strthinkick(V, length, polynom_a, polynom_b, rad_const=0e0, qexit_const=0e0)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if i <= size(V)[2]
 
         real_sum, imag_sum = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
-        if rad_const != 0f0
+        if rad_const != 0e0
 
-            pnorm = 1f0 / (1f0 + V[5,i])
+            pnorm = 1e0 / (1e0 + V[5,i])
             px = V[2,i]*pnorm
             py = V[4,i]*pnorm
             b2p = _gpu_b2_perp(imag_sum, real_sum, px, py)
-            delta_factor = (1f0 + V[5,i])^2
-            dl_ds = 1f0 + ((px*px + py*py) / 2)
+            delta_factor = (1e0 + V[5,i])^2
+            dl_ds = 1e0 + ((px*px + py*py) / 2)
             V[5,i] -= rad_const * delta_factor * b2p * dl_ds * length
         
-            if qexit_const != 0f0
+            if qexit_const != 0e0
                 d = delta_factor * qexit_const * sqrt(b2p^1.5 * dl_ds)
                 V[5,i] += d * randn(Float64)
             end
 
-            pnorm = 1f0 + V[5,i]
+            pnorm = 1e0 + V[5,i]
             V[2,i] += px * pnorm
             V[4,i] += py * pnorm
         end
@@ -115,29 +119,29 @@ end
 # V is a CuArray dim = (6, nr_particles)
 # length, irho, rad_const and qexcit_const are Floats (32)
 # polynom_a and polynom_b are CuArrays
-function _gpu_bndthinkick(V, length, polynom_a, polynom_b, irho, rad_const=0f0, qexit_const=0f0)
+function _gpu_bndthinkick(V, length, polynom_a, polynom_b, irho, rad_const=0e0, qexit_const=0e0)
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if i <= size(V)[2]
 
         real_sum, imag_sum = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
         de = V[5,i]
-        if rad_const != 0f0
+        if rad_const != 0e0
 
-            pnorm = 1f0 / (1f0 + de)
+            pnorm = 1e0 / (1e0 + de)
             px = V[2,i]*pnorm
             py = V[4,i]*pnorm
-            curv = 1f0 + (irho * V[1,i])
+            curv = 1e0 + (irho * V[1,i])
             b2p = _gpu_b2_perp(imag_sum, real_sum, px, py, curv)
-            delta_factor = (1f0 + de)^2
+            delta_factor = (1e0 + de)^2
             dl_ds = curv + ((px*px + py*py) / 2)
             V[5,i] -= rad_const * delta_factor * b2p * dl_ds * length
         
-            if qexit_const != 0f0
+            if qexit_const != 0e0
                 d = delta_factor * qexit_const * sqrt(b2p^1.5 * dl_ds)
                 V[5,i] += d * randn(Float64)
             end
 
-            pnorm = 1f0 + V[5,i]
+            pnorm = 1e0 + V[5,i]
             V[2,i] += px * pnorm
             V[4,i] += py * pnorm
         end
@@ -155,9 +159,9 @@ function _gpu_edge_fringe(V, inv_rho, edge_angle, fint, gap)
     if i <= size(V)[2]
         de = V[5,i]
 
-        fx = inv_rho * tan(edge_angle) / (1f0 + de)
-        psi_par = edge_angle - inv_rho * gap * fint * (1f0 + sin(edge_angle))
-        fy = inv_rho * tan(psi_par) / (1f0 + de)
+        fx = inv_rho * tan(edge_angle) / (1e0 + de)
+        psi_par = edge_angle - inv_rho * gap * fint * (1e0 + sin(edge_angle))
+        fy = inv_rho * tan(psi_par) / (1e0 + de)
 
         V[2,i] += V[1,i] * fx
         V[4,i] -= V[3,i] * fy
@@ -177,7 +181,7 @@ function gpu_pm_drift_pass!(V, elem, status)
     return nothing
 end
 
-function gpu_pm_str_mpole_symplectic4_pass!(V, elem, status, rad_sts, energy)
+function gpu_pm_str_mpole_symplectic4_pass!(V, elem, accelerator, status)
     steps = elem.nr_steps
     sl = elem.length / steps
     l1 = sl * DRIFT1
@@ -187,23 +191,23 @@ function gpu_pm_str_mpole_symplectic4_pass!(V, elem, status, rad_sts, energy)
 
     polynom_a = elem.polynom_a
     polynom_b = elem.polynom_b
-    rad_const = 0f0
-    qexcit_const = 0f0
+    rad_const = 0e0
+    qexcit_const = 0e0
 
-    if rad_sts == 1
-        rad_const = CGAMMA * (energy/1f9)^3 / TWOPI
+    if accelerator.radiation_state == 1
+        rad_const = CGAMMA * (accelerator.energy/1e9)^3 / TWOPI
     end
-    if rad_sts == 2
-        qexcit_const = CQEXT * energy^2 * sqrt(energy * sl)
+    if accelerator.radiation_state == 2
+        qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
     for i in 1:steps
         _gpu_drift(V, l1)
-        _gpu_strthinkick(V, k1, polynom_a, polynom_b, rad_const, 0.0f0)
+        _gpu_strthinkick(V, k1, polynom_a, polynom_b, rad_const, 0.0e0)
         _gpu_drift(V, l2)
         _gpu_strthinkick(V, k2, polynom_a, polynom_b, rad_const, qexcit_const)
         _gpu_drift(V, l2)
-        _gpu_strthinkick(V, k1, polynom_a, polynom_b, rad_const, 0.0f0)
+        _gpu_strthinkick(V, k1, polynom_a, polynom_b, rad_const, 0.0e0)
         _gpu_drift(V, l1)
     end
 
@@ -212,8 +216,11 @@ function gpu_pm_str_mpole_symplectic4_pass!(V, elem, status, rad_sts, energy)
 end
 
 using SiriusTrack.Elements: Element
+using SiriusTrack.AcceleratorModule: Accelerator
 using SiriusTrack.Models.StorageRing: create_accelerator
 acc = create_accelerator()
+acc.radiation_state = 2
+acc
 struct GPUElement
     pass_method::Int
     length::Float64
@@ -222,14 +229,22 @@ struct GPUElement
     polynom_b::CuDeviceVector{Float64, 1}
     nr_steps::Int
 end
+struct GPUAccelerator 
+    energy::Float64
+    radiation_state::Int
+end
 using Adapt
 Adapt.adapt_structure(to, s::Element) = GPUElement(
     adapt(to, Int(s.pass_method)),
     adapt(to, Float64(s.length)),
     adapt(to, Int(s.vchamber)),
     adapt(to, CuArray(Float64.(s.polynom_a))),
-    adapt(to, CuArray(Float64.(s.polynom_a))),
+    adapt(to, CuArray(Float64.(s.polynom_b))),
     adapt(to, Int(s.nr_steps))
+)
+Adapt.adapt_structure(to, s::Accelerator) = GPUAccelerator(
+    adapt(to, Float64(s.energy)),
+    adapt(to, Int(s.radiation_state)),
 )
 using SiriusTrack.PosModule: Pos
 using SiriusTrack.Tracking: element_pass
@@ -238,13 +253,13 @@ p1 = Pos(1) * 1e-6
 element_pass(elem, p1, acc)
 p1
 
-x = CUDA.ones(Float64, (6, dim)) * 1f-6
+x = CUDA.ones(Float64, (6, dim)) * 1e-6
 st = 1
 CUDA.@time CUDA.@sync @cuda(
-    threads = 10, #nthreads,
-    blocks = 10, #nblocks,
-    gpu_pm_str_mpole_symplectic4_pass!(x, elem, st, 2, 3f9)
+    threads = nthreads,
+    blocks = nblocks,
+    
 )
 
-p1
-x
+
+p1, x[:,end]
