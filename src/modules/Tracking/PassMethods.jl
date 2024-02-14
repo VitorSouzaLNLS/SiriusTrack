@@ -30,12 +30,6 @@ function _drift(pos::Pos{Float64}, length::Float64)
     pos.dl += 0.5 * norml * pnorm * (pos.px*pos.px + pos.py*pos.py)
 end
 
-# function _drift_fast(pos::Pos{Float64}, norml::Float64) 
-#     pos.rx += norml * pos.px
-#     pos.ry += norml * pos.py
-#     pos.dl += 0.5 * norml * (pos.px^2 + pos.py^2) / (1 + pos.de)
-# end
-
 function _calcpolykick(pos::Pos{Float64}, polynom_a::Vector{Float64},
     polynom_b::Vector{Float64}) 
     n::Int = min(length(polynom_b), length(polynom_a))
@@ -144,28 +138,6 @@ function _edge_fringe(pos::Pos{Float64}, inv_rho::Float64, edge_angle::Float64,
     pos.px += rx * fx
     pos.py -= ry * fy
 end
-
-# function _translate_pos(pos::Pos{Float64}, t::Vector{Float64}) 
-#     pos.rx += t[1]
-#     pos.px += t[2]
-#     pos.ry += t[3]
-#     pos.py += t[4]
-#     pos.de += t[5]
-#     pos.dl += t[6]
-# end
-
-# function _rotate_pos(pos::Pos{Float64}, R::Vector{Float64}) 
-#     rx0, px0 = pos.rx, pos.px
-#     ry0, py0 = pos.ry, pos.py
-#     de0, dl0 = pos.de, pos.dl
-
-#     pos.rx = R[0*6 + 1]*rx0 + R[0*6 + 2]*px0 + R[0*6 + 3]*ry0 + R[0*6 + 4]*py0 + R[0*6 + 5]*de0 + R[0*6 + 6]*dl0
-#     pos.px = R[1*6 + 1]*rx0 + R[1*6 + 2]*px0 + R[1*6 + 3]*ry0 + R[1*6 + 4]*py0 + R[1*6 + 5]*de0 + R[1*6 + 6]*dl0
-#     pos.ry = R[2*6 + 1]*rx0 + R[2*6 + 2]*px0 + R[2*6 + 3]*ry0 + R[2*6 + 4]*py0 + R[2*6 + 5]*de0 + R[2*6 + 6]*dl0
-#     pos.py = R[3*6 + 1]*rx0 + R[3*6 + 2]*px0 + R[3*6 + 3]*ry0 + R[3*6 + 4]*py0 + R[3*6 + 5]*de0 + R[3*6 + 6]*dl0
-#     pos.de = R[4*6 + 1]*rx0 + R[4*6 + 2]*px0 + R[4*6 + 3]*ry0 + R[4*6 + 4]*py0 + R[4*6 + 5]*de0 + R[4*6 + 6]*dl0
-#     pos.dl = R[5*6 + 1]*rx0 + R[5*6 + 2]*px0 + R[5*6 + 3]*ry0 + R[5*6 + 4]*py0 + R[5*6 + 5]*de0 + R[5*6 + 6]*dl0
-# end
 
 function pm_identity_pass!(pos::Pos{Float64}, element::Element) 
     return st_success
@@ -315,7 +287,7 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
 
         # Longitudinal momentum kick
         pos.de += -nv * sin((TWOPI * frf * ((pos.dl/velocity) - ((harmonic_number/frf - T0)*turn_number))) - philag)
-        #pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
+        # pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
 
         # Drift half length
         pnorm = 1.0 / (1.0 + de)
