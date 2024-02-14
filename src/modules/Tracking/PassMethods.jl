@@ -276,10 +276,9 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
     else
         px::Float64 = pos.px
         py::Float64 = pos.py
-        de::Float64 = pos.de
 
         # Drift half length
-        pnorm::Float64 = 1 / (1 + de)
+        pnorm::Float64 = 1 / (1 + pos.de)
         norml::Float64 = (0.5 * elem.length) * pnorm
         pos.rx += norml * px
         pos.ry += norml * py
@@ -290,7 +289,7 @@ function pm_cavity_pass!(pos::Pos{Float64}, elem::Element, accelerator::Accelera
         # pos.de += -nv * sin(TWOPI * frf * dl / velocity - philag)
 
         # Drift half length
-        pnorm = 1.0 / (1.0 + de)
+        pnorm = 1.0 / (1.0 + pos.de)
         norml = (0.5 * elem.length) * pnorm
         pos.rx += norml * px
         pos.ry += norml * py
