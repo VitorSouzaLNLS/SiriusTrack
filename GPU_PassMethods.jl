@@ -477,14 +477,6 @@ acc.cavity_state = 0
 #acc.lattice = acc.lattice[1:10]
 acc
 
-const dim = 1000
-
-nthreads = Int(floor(CUDA.attribute(
-    device(),
-    CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK
-) * 0.5))
-
-nblocks = cld(dim, nthreads)
 
 p1 = Pos(1) * 1e-6
 #element_pass(elem, p1, acc)
@@ -493,39 +485,34 @@ xf, _, _ = line_pass(acc, p1, "closed")
 xf
 
 function test1(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, status::Int, turn_number::Int=0)
-    @inbounds saved_arr[1, 1] += V[1, end]
-    @inbounds saved_arr[2, 1] += V[2, end]
-    @inbounds saved_arr[3, 1] += V[3, end]
-    @inbounds saved_arr[4, 1] += V[4, end]
-    @inbounds saved_arr[5, 1] += V[5, end]
-    @inbounds saved_arr[6, 1] += V[6, end]
+    i::Int = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    @inbounds saved_arr[1, i, 1] = V[1, i]
+    @inbounds saved_arr[2, i, 1] = V[2, i]
+    @inbounds saved_arr[3, i, 1] = V[3, i]
+    @inbounds saved_arr[4, i, 1] = V[4, i]
+    @inbounds saved_arr[5, i, 1] = V[5, i]
+    @inbounds saved_arr[6, i, 1] = V[6, i]
     o::Int = 2
     for elem in accelerator.lattice
         gpu_element_pass_kernel(elem, V, accelerator, status, turn_number)
-        @inbounds saved_arr[1, o] += V[1, end]
-        @inbounds saved_arr[2, o] += V[2, end]
-        @inbounds saved_arr[3, o] += V[3, end]
-        @inbounds saved_arr[4, o] += V[4, end]
-        @inbounds saved_arr[5, o] += V[5, end]
-        @inbounds saved_arr[6, o] += V[6, end]
+        @inbounds saved_arr[1, i, o] = V[1, i]
+        @inbounds saved_arr[2, i, o] = V[2, i]
+        @inbounds saved_arr[3, i, o] = V[3, i]
+        @inbounds saved_arr[4, i, o] = V[4, i]
+        @inbounds saved_arr[5, i, o] = V[5, i]
+        @inbounds saved_arr[6, i, o] = V[6, i]
         o += 1
     end
     return nothing
 end
 
-function test2(accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, status::Int, turn_number::Int=0)
-    for elem in accelerator.lattice
-        gpu_element_pass_kernel(elem, V, accelerator, status, turn_number)
-    end
-    return nothing
-end
 
-
-nthreads = 100#Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
+const dim = 1000
+nthreads = 200 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
 nblocks = cld(dim, nthreads)
 
 x = CUDA.ones(Float64, (6, dim)) * 1e-6; st::Int = 1; nturn::Int = 0; x
-saved_arr = CUDA.zeros(Float64, (6, length(acc.lattice)+1))
+saved_arr = CUDA.zeros(Float64, (6, dim, length(acc.lattice)+1))
 CUDA.@time CUDA.@sync @cuda(
     threads = nthreads,
     blocks = nblocks,
@@ -537,8 +524,13 @@ CUDA.@time CUDA.@sync @cuda(
     #test2(acc, x, st, nturn)
 ); #xf[end], x[:,end]
 
-x[:, end]
-p1
+saved_arr
+xf[end]
+x[1, end]
+saved_arr[1, end, end]
+
+saved_arr
+x[1, :]
 
 cpu_arr = Array(saved_arr)
 
@@ -546,8 +538,8 @@ using Plots
 
 if true
     plot()
-    plot!([j.rx for j in xf])
-    plot!(cpu_arr[1,:])
+    plot!([j.dl for j in xf])
+    plot!(cpu_arr[6,2,:])
 end
 
 # d::Int8 = Int8(1)
