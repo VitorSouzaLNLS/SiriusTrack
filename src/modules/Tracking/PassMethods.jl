@@ -36,12 +36,10 @@ function _calcpolykick(pos::Pos{Float64}, polynom_a::Vector{Float64},
     if n != 0
         real_sum = polynom_b[n]
         imag_sum = polynom_a[n]
-        println("n = $n  rs0 = $real_sum  $imag_sum")
         for i = n-1:-1:1
             real_sum_tmp = real_sum * pos.rx - imag_sum * pos.ry + polynom_b[i]
             imag_sum = imag_sum * pos.rx + real_sum * pos.ry + polynom_a[i]
             real_sum = real_sum_tmp
-            println("i = $i  rs0 = $real_sum  $imag_sum")
         end
         return real_sum, imag_sum
     end
@@ -108,7 +106,6 @@ function _bndthinkick(pos::Pos{Float64}, length::Float64, polynom_a::Vector{Floa
         delta_factor::Float64 = (1 + pos.de)^2
         dl_ds::Float64 = curv + ((px*px + py*py) / 2)
         addfactor::Float64 = rad_const * delta_factor * b2p * dl_ds * length
-        println("addfactor = ", addfactor)
         pos.de -= addfactor
 
         if qexcit_const != 0.0
@@ -206,7 +203,6 @@ function pm_bnd_mpole_symplectic4_pass!(pos::Pos{Float64}, elem::Element, accele
 
     if accelerator.radiation_state == on
         rad_const = CGAMMA * (accelerator.energy / 1e9)^3 / (TWOPI)
-        println("rad_const = ", rad_const)
     end
 
     if accelerator.radiation_state == full
