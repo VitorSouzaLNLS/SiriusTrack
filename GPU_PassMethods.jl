@@ -12,6 +12,7 @@ using SiriusTrack.Tracking: element_pass
 # CUDA.versioninfo()
 
 struct GPUElement
+    fam_name   ::Int8
     pass_method::Int8
     length     ::Float64
     vchamber   ::Int8
@@ -41,9 +42,10 @@ struct GPUAccelerator
     length::Float64
     velocity::Float64
     harmonic_number::Int64
+    lattice::CuDeviceVector{Float64, 1} # still dont understant
 end
-using Adapt
 Adapt.adapt_structure(to, s::Element) = GPUElement(
+    adapt(to, Int8(0)),
     adapt(to, Int8(s.pass_method)),
     adapt(to, Float64(s.length)),
     adapt(to, Int8(s.vchamber)),
@@ -72,7 +74,8 @@ Adapt.adapt_structure(to, s::Accelerator) = GPUAccelerator(
     adapt(to, Int8(s.cavity_state)),
     adapt(to, Float64(s.length)),
     adapt(to, Float64(s.velocity)),
-    adapt(to, Int64(s.harmonic_number))
+    adapt(to, Int64(s.harmonic_number)),
+    adapt(to, CuArray{Float64, 1}([1,2,3]))
 )
 
 const DRIFT1::Float64  =  0.6756035959798286638e00
@@ -232,16 +235,15 @@ function _gpu_edge_fringe(V::CuDeviceArray{Float64, 2}, inv_rho::Float64, edge_a
     end
     return nothing
 end
-# x = CUDA.rand(Float64, (6, dim))
 
 function gpu_pm_identity_pass!(status::Int)
-    status = 1 # success
+    status = 0 # success
     return nothing
 end
 
 function gpu_pm_drift_pass!(V::CuDeviceArray{Float64, 2}, elem, status::Int)
     _gpu_drift(V, elem.length)
-    status = 1
+    status = 0
     return nothing
 end
 
@@ -275,7 +277,7 @@ function gpu_pm_str_mpole_symplectic4_pass!(V::CuDeviceArray{Float64, 2}, elem::
         _gpu_drift(V, l1)
     end
 
-    status = 1
+    status = 0
     return nothing
 end
 
@@ -320,7 +322,7 @@ function gpu_pm_bnd_mpole_symplectic4_pass!(V::CuDeviceArray{Float64, 2}, elem::
 
     _gpu_edge_fringe(V, irho, ang_out, fint_out, gap)
 
-    status = 1
+    status = 0
     return nothing
 end
 
@@ -337,18 +339,18 @@ function gpu_pm_corrector_pass!(V::CuDeviceArray{Float64, 2}, elem::GPUElement, 
             py::Float64 = V[4,i]
             pnorm::Float64 = 1e0 / (1e0 + V[5,i])
             norml::Float64 = elem.length * pnorm
-            @inbounds V[6,i] += norml * pnorm * 0.5 * (xkick * xkick/3.0 + ykick * ykick/3.0 + px*px + py*py + px * xkick + py * ykick)
-            @inbounds V[1,i] += norml * (px + 0.5 * xkick)
-            @inbounds V[2,i] += xkick
-            @inbounds V[3,i] += norml * (py + 0.5 * ykick)
-            @inbounds V[4,i] += ykick
+            @inbounds V[6,i] += norml * pnorm * 0.5 * (hkick * hkick/3.0 + vkick * vkick/3.0 + px*px + py*py + px * hkick + py * vkick)
+            @inbounds V[1,i] += norml * (px + 0.5 * hkick)
+            @inbounds V[2,i] += hkick
+            @inbounds V[3,i] += norml * (py + 0.5 * vkick)
+            @inbounds V[4,i] += vkick
         end
     end
-    status = 1
+    status = 0
     return nothing
 end
 
-function gpu_pm_cavity_pass!(V::CuDeviceArray{Float64, 2}, elem::GPUElement, accelerator::GPUAccelerator, status::Int; turn_number::Int=0)
+function gpu_pm_cavity_pass!(V::CuDeviceArray{Float64, 2}, elem::GPUElement, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
     if accelerator.cavity_state == 0
         gpu_pm_drift_pass!(V, elem, status)
         return nothing
@@ -385,8 +387,45 @@ function gpu_pm_cavity_pass!(V::CuDeviceArray{Float64, 2}, elem::GPUElement, acc
         end
         
     end
-    status = 1
+    status = 0
     return nothing
+end
+
+    # PassMethods: (Int8 for GPU)
+    #     0 pm_identity_pass 
+    #     1 pm_corrector_pass 
+    #     2 pm_drift_pass 
+    #     3 pm_matrix_pass 
+    #     4 pm_bnd_mpole_symplectic4_pass 
+    #     5 pm_str_mpole_symplectic4_pass 
+    #     6 pm_cavity_pass 
+    #     7 pm_kickmap_pass
+
+    # Status: (Int for GPU)
+    #     0 st_success
+    #     2 st_passmethod_not_defined
+function gpu_element_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
+    pass_method::Int8 = elem.pass_method
+    if pass_method == 0
+        gpu_pm_identity_pass!(status)
+    elseif pass_method == 2
+        gpu_pm_drift_pass!(V, elem, status)
+    elseif pass_method == 5
+        gpu_pm_str_mpole_symplectic4_pass!(V, elem, accelerator, status)
+    elseif pass_method == 4
+        gpu_pm_bnd_mpole_symplectic4_pass!(V, elem, accelerator, status)
+    elseif pass_method == 1
+        gpu_pm_corrector_pass!(V, elem, status)
+    elseif pass_method == 6
+        gpu_pm_cavity_pass!(V, elem, accelerator, status, turn_number)
+    else
+        status = 2
+    end
+    return nothing
+end
+
+function gpu_line_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
+    
 end
 
 acc = create_accelerator()
@@ -402,16 +441,26 @@ const dim = 10_000
 nthreads = Int(floor(CUDA.attribute(
     device(),
     CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK
-) * 0.8))
+) * 0.5))
 
 nblocks = cld(dim, nthreads)
 
+function printcutype(s)
+    CuArray(acc.lattice)
+    #CUDA.@cuprintln(typeof(s))
+    return nothing
+end
+
 x = CUDA.ones(Float64, (6, dim)) * 1e-6
 st::Int = 1
+nturn::Int = 0
+
 CUDA.@time CUDA.@sync @cuda(
-    threads = nthreads,
-    blocks = nblocks,
-    gpu_pm_cavity_pass!(x, elem, acc, st)
+    threads = 1,#nthreads,
+    blocks = 1,#nblocks,
+    printcutype(acc.lattice)
+    #gpu_element_pass_kernel(elem, x, acc, nturn)
 )
 
-p1, x[:,end]
+
+p1, x[:,end], st
