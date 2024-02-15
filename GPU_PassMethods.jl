@@ -5,7 +5,8 @@ using SiriusTrack.Elements: Element
 using SiriusTrack.AcceleratorModule: Accelerator
 using SiriusTrack.Models.StorageRing: create_accelerator
 using SiriusTrack.PosModule: Pos
-using SiriusTrack.Tracking: element_pass
+using SiriusTrack.Tracking: element_pass, line_pass
+using SiriusTrack
 
 # versioninfo()
 
@@ -42,7 +43,7 @@ struct GPUAccelerator
     length::Float64
     velocity::Float64
     harmonic_number::Int64
-    lattice::CuDeviceVector{Float64, 1} # still dont understant
+    lattice::CuDeviceVector{GPUElement, 1} # still dont understant
 end
 Adapt.adapt_structure(to, s::Element) = GPUElement(
     adapt(to, Int8(0)),
@@ -75,7 +76,7 @@ Adapt.adapt_structure(to, s::Accelerator) = GPUAccelerator(
     adapt(to, Float64(s.length)),
     adapt(to, Float64(s.velocity)),
     adapt(to, Int64(s.harmonic_number)),
-    adapt(to, CuArray{Float64, 1}([1,2,3]))
+    adapt(to, CuArray{GPUElement, 1}([adapt(to, e) for e in s.lattice]))
 )
 
 const DRIFT1::Float64  =  0.6756035959798286638e00
@@ -163,8 +164,8 @@ function _gpu_strthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
             @inbounds py::Float64 = V[4,i]*pnorm
             b2p::Float64 = _gpu_b2_perp(imag_sum, real_sum, px, py)
             delta_factor::Float64 = (1e0 + de)^2
-            dl_ds::Float64 = 1e0 + ((px*px + py*py) / 2)
-            @inbounds V[5,i] -= rad_const * delta_factor * b2p * dl_ds * length
+            dl_ds::Float64 = 1e0 + ((px*px + py*py) / 2e0)
+            @inbounds V[5,i] -= (rad_const * delta_factor * b2p * dl_ds * length)
         
             if qexit_const != 0e0
                 d::Float64 = delta_factor * qexit_const * sqrt(b2p^1.5 * dl_ds)
@@ -172,8 +173,8 @@ function _gpu_strthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
             end
 
             @inbounds pnorm = 1e0 + V[5,i]
-            @inbounds V[2,i] += px * pnorm
-            @inbounds V[4,i] += py * pnorm
+            @inbounds V[2,i] = px * pnorm
+            @inbounds V[4,i] = py * pnorm
         end
         @inbounds V[2,i] -= length * real_sum
         @inbounds V[4,i] += length * imag_sum
@@ -209,8 +210,8 @@ function _gpu_bndthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
             end
 
             @inbounds pnorm = 1e0 + V[5,i]
-            @inbounds V[2,i] += px * pnorm
-            @inbounds V[4,i] += py * pnorm
+            @inbounds V[2,i] = px * pnorm
+            @inbounds V[4,i] = py * pnorm
         end
         @inbounds V[2,i] -= length * (real_sum - (de - V[1,i] * irho) * irho)
         @inbounds V[4,i] += length * imag_sum
@@ -249,7 +250,8 @@ end
 
 function gpu_pm_str_mpole_symplectic4_pass!(V::CuDeviceArray{Float64, 2}, elem::GPUElement, accelerator::GPUAccelerator, status::Int)
     steps::Int16 = elem.nr_steps
-    sl::Float64 = elem.length / steps
+    sl::Float64 = elem.length / Float64(steps)
+
     l1::Float64 = sl * DRIFT1
     l2::Float64 = sl * DRIFT2
     k1::Float64 = sl * KICK1
@@ -267,7 +269,7 @@ function gpu_pm_str_mpole_symplectic4_pass!(V::CuDeviceArray{Float64, 2}, elem::
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
-    for _ in 1:steps
+    for j in 1:steps
         _gpu_drift(V, l1)
         _gpu_strthinkick(V, k1, polynom_a, polynom_b, rad_const, 0.0e0)
         _gpu_drift(V, l2)
@@ -391,20 +393,20 @@ function gpu_pm_cavity_pass!(V::CuDeviceArray{Float64, 2}, elem::GPUElement, acc
     return nothing
 end
 
-    # PassMethods: (Int8 for GPU)
-    #     0 pm_identity_pass 
-    #     1 pm_corrector_pass 
-    #     2 pm_drift_pass 
-    #     3 pm_matrix_pass 
-    #     4 pm_bnd_mpole_symplectic4_pass 
-    #     5 pm_str_mpole_symplectic4_pass 
-    #     6 pm_cavity_pass 
-    #     7 pm_kickmap_pass
+# PassMethods: (Int8 for GPU)
+#     0 pm_identity_pass 
+#     1 pm_corrector_pass 
+#     2 pm_drift_pass 
+#     3 pm_matrix_pass 
+#     4 pm_bnd_mpole_symplectic4_pass 
+#     5 pm_str_mpole_symplectic4_pass 
+#     6 pm_cavity_pass 
+#     7 pm_kickmap_pass
 
-    # Status: (Int for GPU)
-    #     0 st_success
-    #     2 st_passmethod_not_defined
-function gpu_element_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
+# Status: (Int for GPU)
+#     0 st_success
+#     2 st_passmethod_not_defined
+    function gpu_element_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
     pass_method::Int8 = elem.pass_method
     if pass_method == 0
         gpu_pm_identity_pass!(status)
@@ -424,19 +426,18 @@ function gpu_element_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2},
     return nothing
 end
 
-function gpu_line_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
-    
+function gpu_line_pass_kernel(accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, status::Int, turn_number::Int=0)
+    for elem in accelerator.lattice
+        gpu_element_pass_kernel(elem, V, accelerator, status, turn_number)
+    end
+    return nothing
 end
 
 acc = create_accelerator()
 acc.radiation_state = 1
-acc.cavity_state = 1
-elem = acc.lattice[658]
-p1 = Pos(1) * 1e-6
-element_pass(elem, p1, acc)
-p1
+acc.cavity_state = 0
 
-const dim = 10_000
+const dim = 1
 
 nthreads = Int(floor(CUDA.attribute(
     device(),
@@ -445,21 +446,23 @@ nthreads = Int(floor(CUDA.attribute(
 
 nblocks = cld(dim, nthreads)
 
-function printcutype(s)
-    CuArray(acc.lattice)
-    #CUDA.@cuprintln(typeof(s))
-    return nothing
-end
+idx = 4; elem = acc.lattice[idx]
 
-x = CUDA.ones(Float64, (6, dim)) * 1e-6
-st::Int = 1
-nturn::Int = 0
+elem.nr_steps
+elem.length
+elem.length / elem.nr_steps
+
+p1 = Pos(1) * 1e-6
+line_pass(acc, p1, "end"); p1
+
+x = CUDA.ones(Float64, (6, dim)) * 1e-6; st::Int = 1; nturn::Int = 0; x
 
 CUDA.@time CUDA.@sync @cuda(
-    threads = 1,#nthreads,
-    blocks = 1,#nblocks,
-    printcutype(acc.lattice)
-    #gpu_element_pass_kernel(elem, x, acc, nturn)
+    threads = 1,
+    blocks = 1,
+    # gpu_element_pass_kernel(elem, x, acc, st, nturn)
+    # gpu_pm_str_mpole_symplectic4_pass!(x, elem, acc, st)
+    gpu_line_pass_kernel(acc, x, st, nturn)
 )
 
 
