@@ -118,34 +118,6 @@ function _gpu_drift(V::CuDeviceArray{Float64, 2}, length::Float64)
     return nothing
 end
 
-# # x and y are Floats (32)
-# # polynom_a and polynom_b are CuArrays
-# function _gpu_calcpolykick(real_sum::CuPtr{Float64}, imag_sum::CuPtr{Float64}, x::Float64, y::Float64, polynom_a::CuDeviceVector{Float64, 1}, polynom_b::CuDeviceVector{Float64, 1})
-#     n::Int = Int(min(length(polynom_a), length(polynom_b)))
-#     if n != 0
-#         @inbounds real_sum[] = polynom_b[n]
-#         @inbounds imag_sum[] = polynom_a[n]
-#         real_sum_temp::Float64 = 0e0
-#         for j = n-1:-1:1
-#             @inbounds real_sum_temp = (real_sum[] * x) - (imag_sum[] * y) + polynom_b[j]
-#             @inbounds imag_sum[] = (imag_sum[] * x) + (real_sum[] * y) + polynom_a[j]
-#             real_sum[] = real_sum_temp
-#         end
-#     end
-#     return
-# end
-
-# # bx, by, px, py and curv are Floats (32)
-# function _gpu_b2_perp(b2p::CuPtr{Float64}, bx::Float64, by::Float64, px::Float64, py::Float64, curv::Float64=1e0)
-#     curv2::Float64 = curv^2
-#     v_norm2_inv::Float64 = curv2 + px^2 + py^2
-#     b2p[] = by^2 + bx^2
-#     b2p[] *= curv2
-#     b2p[] += (bx*py - by*px)^2
-#     b2p[] /= v_norm2_inv
-#     return nothing
-# end
-
 # V is a CuArray dim = (6, nr_particles)
 # length, rad_const and qexcit_const are Floats (32)
 # polynom_a and polynom_b are CuArrays
@@ -515,7 +487,7 @@ function test1(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64,
 end
 
 
-const dim = Int(15*20)
+const dim = Int(70*30)
 nthreads = 256 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
 nblocks = cld(dim, nthreads)
 
@@ -536,4 +508,4 @@ CUDA.@time CUDA.@sync @cuda(
 size(x)
 
 xf[end]
-x[1, end]
+x[:, end]
