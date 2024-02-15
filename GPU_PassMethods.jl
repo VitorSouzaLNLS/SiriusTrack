@@ -123,13 +123,17 @@ end
 function _gpu_calcpolykick(x::Float64, y::Float64, polynom_a::CuDeviceVector{Float64, 1}, polynom_b::CuDeviceVector{Float64, 1})
     real_sum::Float64 = 0e0
     imag_sum::Float64 = 0e0
-    real_sum_temp::Float64 = 0e0
-    n::Int = min(length(polynom_a), length(polynom_b))
+    n::Int = Int(min(length(polynom_a), length(polynom_b)))
     if n != 0
-        for j in n-1:-1:1
-            @inbounds real_sum_temp = real_sum * x - imag_sum * y + polynom_b[j]
-            @inbounds imag_sum = imag_sum * x + real_sum * y + polynom_a[j]
+        @inbounds real_sum = polynom_b[n]
+        @inbounds imag_sum = polynom_a[n]
+        real_sum_temp::Float64 = 0e0
+        CUDA.@cuprintln("n = ", n, " rs0 = ", real_sum, " ", imag_sum)
+        for j = n-1:-1:1
+            @inbounds real_sum_temp = (real_sum * x) - (imag_sum * y) + polynom_b[j]
+            @inbounds imag_sum = (imag_sum * x) + (real_sum * y) + polynom_a[j]
             real_sum = real_sum_temp
+            CUDA.@cuprintln("j = ", j, " rs = ", real_sum, " ", imag_sum)
         end
     end
     return real_sum, imag_sum
@@ -191,8 +195,9 @@ function _gpu_bndthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
 
         real_sum::Float64 = 0e0
         imag_sum::Float64 = 0e0
-        @inbounds real_sum, imag_sum = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
-        @inbounds de = V[5,i]
+        @inbounds (real_sum, imag_sum) = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
+        CUDA.@cuprintln("real_sum, imag_sum = ", real_sum, " ", imag_sum)
+        @inbounds de::Float64 = V[5,i]
         if rad_const != 0e0
 
             pnorm::Float64 = 1e0 / (1e0 + de)
@@ -202,7 +207,9 @@ function _gpu_bndthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
             b2p::Float64 = _gpu_b2_perp(imag_sum, real_sum, px, py, curv)
             delta_factor::Float64 = (1e0 + de)^2
             dl_ds::Float64 = curv + ((px*px + py*py) / 2)
-            @inbounds V[5,i] -= rad_const * delta_factor * b2p * dl_ds * length
+            fff::Float64 = (rad_const * delta_factor * b2p * dl_ds * length)
+            CUDA.@cuprintln("fff = ", de, " ", pnorm, " ", px, " ", py, " ", curv, " ", delta_factor, " ", b2p, " ", dl_ds, " ", length)
+            @inbounds V[5,i] -= fff
         
             if qexit_const != 0e0
                 d::Float64 = delta_factor * qexit_const * sqrt(b2p^1.5 * dl_ds)
@@ -262,10 +269,14 @@ function gpu_pm_str_mpole_symplectic4_pass!(V::CuDeviceArray{Float64, 2}, elem::
     rad_const::Float64 = 0e0
     qexcit_const::Float64 = 0e0
 
-    if accelerator.radiation_state == 1
+    rad_sts::Int = Int(accelerator.radiation_state)
+
+    #CUDA.@cuprintln("rad sts = ", rad_sts)
+    if rad_sts == 1
         rad_const = CGAMMA * (accelerator.energy/1e9)^3 / TWOPI
+     #   CUDA.@cuprintln(" rad_const = ", rad_const)
     end
-    if accelerator.radiation_state == 2
+    if rad_sts == 2
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
@@ -297,10 +308,13 @@ function gpu_pm_bnd_mpole_symplectic4_pass!(V::CuDeviceArray{Float64, 2}, elem::
     rad_const::Float64 = 0e0
     qexcit_const::Float64 = 0e0
 
-    if accelerator.radiation_state == 1
+    rad_sts::Int = Int(accelerator.radiation_state)
+    # CUDA.@cuprintln("rad sts = ", rad_sts)
+    if rad_sts == 1
         rad_const = CGAMMA * (accelerator.energy/1e9)^3 / TWOPI
+        CUDA.@cuprintln("gpu rad_const = ", rad_const)
     end
-    if accelerator.radiation_state == 2
+    if rad_sts == 2
         qexcit_const = CQEXT * accelerator.energy^2 * sqrt(accelerator.energy * sl)
     end
 
@@ -436,6 +450,7 @@ end
 acc = create_accelerator()
 acc.radiation_state = 1
 acc.cavity_state = 0
+acc
 
 const dim = 1
 
@@ -446,24 +461,61 @@ nthreads = Int(floor(CUDA.attribute(
 
 nblocks = cld(dim, nthreads)
 
-idx = 4; elem = acc.lattice[idx]
+idx = 10; elem = acc.lattice[idx]
 
-elem.nr_steps
-elem.length
-elem.length / elem.nr_steps
+
 
 p1 = Pos(1) * 1e-6
-line_pass(acc, p1, "end"); p1
+acc.lattice[30]
+for elem in acc.lattice[1:30]
+    element_pass(elem, p1, acc)
+end
+
+function test(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, status::Int, turn_number::Int=0)
+    @inbounds saved_arr[1, 1] += V[1, 1]
+    @inbounds saved_arr[2, 1] += V[2, 1]
+    @inbounds saved_arr[3, 1] += V[3, 1]
+    @inbounds saved_arr[4, 1] += V[4, 1]
+    @inbounds saved_arr[5, 1] += V[5, 1]
+    @inbounds saved_arr[6, 1] += V[6, 1]
+    o::Int = 2
+    elem = accelerator.lattice[30]
+    gpu_element_pass_kernel(elem, V, accelerator, status, turn_number)
+    @inbounds saved_arr[1, o] += V[1, 1]
+    @inbounds saved_arr[2, o] += V[2, 1]
+    @inbounds saved_arr[3, o] += V[3, 1]
+    @inbounds saved_arr[4, o] += V[4, 1]
+    @inbounds saved_arr[5, o] += V[5, 1]
+    @inbounds saved_arr[6, o] += V[6, 1]
+    return nothing
+end
 
 x = CUDA.ones(Float64, (6, dim)) * 1e-6; st::Int = 1; nturn::Int = 0; x
+
+saved_arr = CUDA.zeros(Float64, (6, length(acc.lattice)+1))
 
 CUDA.@time CUDA.@sync @cuda(
     threads = 1,
     blocks = 1,
     # gpu_element_pass_kernel(elem, x, acc, st, nturn)
     # gpu_pm_str_mpole_symplectic4_pass!(x, elem, acc, st)
-    gpu_line_pass_kernel(acc, x, st, nturn)
-)
+    # gpu_line_pass_kernel(acc, x, st, nturn)
+    # gpu_element_pass_kernel(elem, x, acc, st)
+    test(saved_arr, acc, x, st, nturn)
+); xf[end], x[:,end]
+
+saved_arr
 
 
-p1, x[:,end], st
+cpu_arr = Array(saved_arr)
+
+using Plots
+
+cpu_arr[:,end-1], xf[end]
+
+plot()
+plot!([j.rx-cpu_arr[1,i] for (i,j) in enumerate(xf)])
+
+d::Int8 = Int8(1)
+
+d == 1
