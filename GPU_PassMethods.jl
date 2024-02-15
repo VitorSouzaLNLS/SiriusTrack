@@ -121,22 +121,22 @@ end
 # x and y are Floats (32)
 # polynom_a and polynom_b are CuArrays
 function _gpu_calcpolykick(x::Float64, y::Float64, polynom_a::CuDeviceVector{Float64, 1}, polynom_b::CuDeviceVector{Float64, 1})
-    real_sum::Float64 = 0e0
-    imag_sum::Float64 = 0e0
     n::Int = Int(min(length(polynom_a), length(polynom_b)))
     if n != 0
-        @inbounds real_sum = polynom_b[n]
-        @inbounds imag_sum = polynom_a[n]
+        @inbounds real_sum::Float64 = polynom_b[n]
+        @inbounds imag_sum::Float64 = polynom_a[n]
         real_sum_temp::Float64 = 0e0
-        CUDA.@cuprintln("n = ", n, " rs0 = ", real_sum, " ", imag_sum)
+        CUDA.@cuprintf("n = %d rs0 = %.16f  %.16f\n", n, real_sum, imag_sum)
         for j = n-1:-1:1
             @inbounds real_sum_temp = (real_sum * x) - (imag_sum * y) + polynom_b[j]
             @inbounds imag_sum = (imag_sum * x) + (real_sum * y) + polynom_a[j]
             real_sum = real_sum_temp
-            CUDA.@cuprintln("j = ", j, " rs = ", real_sum, " ", imag_sum)
+            CUDA.@cuprintln("j = %d rs0 = %.16f  %.16f\n", j, real_sum, imag_sum)
         end
+        CUDA.@cuprintf("final rs0 = %.16f  %.16f\n", real_sum, imag_sum)
+        return real_sum, imag_sum
     end
-    return real_sum, imag_sum
+    return 0e0, 0e0
 end
 
 # bx, by, px, py and curv are Floats (32)
@@ -158,8 +158,6 @@ function _gpu_strthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
     i::Int = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if i <= size(V)[2]
 
-        real_sum::Float64 = 0e0
-        imag_sum::Float64 = 0e0
         @inbounds real_sum, imag_sum = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
         if rad_const != 0e0
             @inbounds de::Float64 = V[5,i]
@@ -193,9 +191,7 @@ function _gpu_bndthinkick(V::CuDeviceArray{Float64, 2}, length::Float64, polynom
     i::Int = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if i <= size(V)[2]
 
-        real_sum::Float64 = 0e0
-        imag_sum::Float64 = 0e0
-        @inbounds (real_sum, imag_sum) = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
+        @inbounds real_sum, imag_sum = _gpu_calcpolykick(V[1,i], V[3,i], polynom_a, polynom_b)
         CUDA.@cuprintln("real_sum, imag_sum = ", real_sum, " ", imag_sum)
         @inbounds de::Float64 = V[5,i]
         if rad_const != 0e0
@@ -467,9 +463,8 @@ idx = 10; elem = acc.lattice[idx]
 
 p1 = Pos(1) * 1e-6
 acc.lattice[30]
-for elem in acc.lattice[1:30]
-    element_pass(elem, p1, acc)
-end
+elem=acc.lattice[30]
+element_pass(elem, p1, acc)
 
 function test(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, status::Int, turn_number::Int=0)
     @inbounds saved_arr[1, 1] += V[1, 1]
@@ -502,20 +497,20 @@ CUDA.@time CUDA.@sync @cuda(
     # gpu_line_pass_kernel(acc, x, st, nturn)
     # gpu_element_pass_kernel(elem, x, acc, st)
     test(saved_arr, acc, x, st, nturn)
-); xf[end], x[:,end]
+); #xf[end], x[:,end]
 
-saved_arr
+#saved_arr
 
 
-cpu_arr = Array(saved_arr)
+# cpu_arr = Array(saved_arr)
 
-using Plots
+# using Plots
 
-cpu_arr[:,end-1], xf[end]
+# cpu_arr[:,end-1], xf[end]
 
-plot()
-plot!([j.rx-cpu_arr[1,i] for (i,j) in enumerate(xf)])
+# plot()
+# plot!([j.rx-cpu_arr[1,i] for (i,j) in enumerate(xf)])
 
-d::Int8 = Int8(1)
+# d::Int8 = Int8(1)
 
-d == 1
+# d == 1

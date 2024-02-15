@@ -43,10 +43,10 @@ using PrecompileTools
         m.radiation_state = Auxiliary.full
         m.cavity_state = Auxiliary.on
         m.vchamber_state = Auxiliary.on
-        pf, st, lf = Tracking.ring_pass(m, p, 1)
-        # mff = FlatFile.read_flatfile(flatfile_path)  # needs review
-        Orbit.find_orbit4(m)
-        Orbit.find_orbit6(m)
+        # pf, st, lf = Tracking.ring_pass(m, p, 1)
+        # # mff = FlatFile.read_flatfile(flatfile_path)  # needs review
+        # Orbit.find_orbit4(m)
+        # Orbit.find_orbit6(m)
     end
 end
 
