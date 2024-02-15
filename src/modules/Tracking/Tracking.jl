@@ -80,7 +80,7 @@ function line_pass(
 
         # Stores trajectory at entrance of each element
         if indcs[i]
-            push!(tracked_pos, pos)
+            push!(tracked_pos, copy(pos))
         end
 
         status = element_pass(element, pos, accelerator, turn_number=turn_number)
@@ -103,7 +103,7 @@ function line_pass(
 
     # Stores final particle position at the end of the line
     if indcs[nr_elements+1]
-        push!(tracked_pos, pos)
+        push!(tracked_pos, copy(pos))
     end
 
     #println(stdout, "linepass posvec exit = \n$tracked_pos\n")
