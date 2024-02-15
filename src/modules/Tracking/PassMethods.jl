@@ -105,8 +105,7 @@ function _bndthinkick(pos::Pos{Float64}, length::Float64, polynom_a::Vector{Floa
         b2p = _b2_perp(imag_sum, real_sum+irho, px, py, curv)
         delta_factor::Float64 = (1 + pos.de)^2
         dl_ds::Float64 = curv + ((px*px + py*py) / 2)
-        addfactor::Float64 = rad_const * delta_factor * b2p * dl_ds * length
-        pos.de -= addfactor
+        pos.de -= rad_const * delta_factor * b2p * dl_ds * length
 
         if qexcit_const != 0.0
             # quantum excitation kick
