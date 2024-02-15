@@ -5,7 +5,7 @@ using SiriusTrack.Elements: Element
 using SiriusTrack.AcceleratorModule: Accelerator
 using SiriusTrack.Models.StorageRing: create_accelerator
 using SiriusTrack.PosModule: Pos
-using SiriusTrack.Tracking: element_pass, line_pass
+using SiriusTrack.Tracking: element_pass, line_pass, ring_pass
 using SiriusTrack
 
 # versioninfo()
@@ -471,16 +471,24 @@ function gpu_line_pass_kernel(accelerator::GPUAccelerator, V::CuDeviceArray{Floa
     return nothing
 end
 
+function gpu_ring_pass_kernel(accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, nr_turns::Int, status::Int)
+    for n in 1:nr_turns
+        gpu_line_pass_kernel(accelerator, V, status, n-1)
+    end
+    return nothing
+end
+
 acc = create_accelerator()
 acc.radiation_state = 1
-acc.cavity_state = 0
+acc.cavity_state = 1
 #acc.lattice = acc.lattice[1:10]
 acc
 
 
-p1 = Pos(1) * 1e-6
+p1 = Pos(0) * 1e-6
 #element_pass(elem, p1, acc)
-xf, _, _ = line_pass(acc, p1, "closed")
+nr_turns::Int = 1024
+xf, _, _ = ring_pass(acc, p1, nr_turns)
 
 xf
 
@@ -507,12 +515,12 @@ function test1(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64,
 end
 
 
-const dim = 1000
-nthreads = 200 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
+const dim = Int(15*20)
+nthreads = 256 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
 nblocks = cld(dim, nthreads)
 
-x = CUDA.ones(Float64, (6, dim)) * 1e-6; st::Int = 1; nturn::Int = 0; x
-saved_arr = CUDA.zeros(Float64, (6, dim, length(acc.lattice)+1))
+x = CUDA.zeros(Float64, (6, dim)) * 1e-6; st::Int = 1; nturn::Int = 0; x
+# saved_arr = CUDA.zeros(Float64, (6, dim, length(acc.lattice)+1))
 CUDA.@time CUDA.@sync @cuda(
     threads = nthreads,
     blocks = nblocks,
@@ -520,28 +528,12 @@ CUDA.@time CUDA.@sync @cuda(
     # gpu_pm_str_mpole_symplectic4_pass!(x, elem, acc, st)
     # gpu_line_pass_kernel(acc, x, st, nturn)
     # gpu_element_pass_kernel(elem, x, acc, st)
-    test1(saved_arr, acc, x, st, nturn)
+    #test1(saved_arr, acc, x, st, nturn)
     #test2(acc, x, st, nturn)
+    gpu_ring_pass_kernel(acc, x, nr_turns, st)
 ); #xf[end], x[:,end]
 
-saved_arr
+size(x)
+
 xf[end]
 x[1, end]
-saved_arr[1, end, end]
-
-saved_arr
-x[1, :]
-
-cpu_arr = Array(saved_arr)
-
-using Plots
-
-if true
-    plot()
-    plot!([j.dl for j in xf])
-    plot!(cpu_arr[6,2,:])
-end
-
-# d::Int8 = Int8(1)
-
-# d == 1
