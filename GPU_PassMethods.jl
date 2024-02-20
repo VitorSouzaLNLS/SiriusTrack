@@ -1,16 +1,16 @@
 
 using CUDA
 using Adapt
-using SiriusTrack.Elements: Element
-using SiriusTrack.AcceleratorModule: Accelerator
-using SiriusTrack.Models.StorageRing: create_accelerator
-using SiriusTrack.PosModule: Pos
-using SiriusTrack.Tracking: element_pass, line_pass, ring_pass
-using SiriusTrack
+using Track.Elements: Element
+using Track.AcceleratorModule: Accelerator
+using SiriusModels.StorageRing: create_accelerator
+using Track.PosModule: Pos
+using Track.Tracking: element_pass, line_pass, ring_pass
+using Track
 
-# versioninfo()
+versioninfo()
 
-# CUDA.versioninfo()
+CUDA.versioninfo()
 
 struct GPUElement
     fam_name   ::Int8
@@ -416,7 +416,7 @@ end
 # Status: (Int for GPU)
 #     0 st_success
 #     2 st_passmethod_not_defined
-    function gpu_element_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
+function gpu_element_pass_kernel(elem::GPUElement, V::CuDeviceArray{Float64, 2}, accelerator::GPUAccelerator, status::Int, turn_number::Int=0)
     pass_method::Int8 = elem.pass_method
     if pass_method == 0
         gpu_pm_identity_pass!(status)
@@ -453,13 +453,12 @@ end
 acc = create_accelerator()
 acc.radiation_state = 1
 acc.cavity_state = 1
-#acc.lattice = acc.lattice[1:10]
 acc
 
 
-p1 = Pos(0) * 1e-6
-#element_pass(elem, p1, acc)
+p1 = Pos(1) * 1e-6
 nr_turns::Int = 1024
+typeof(p1)
 xf, _, _ = ring_pass(acc, p1, nr_turns)
 
 xf
@@ -487,25 +486,26 @@ function test1(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64,
 end
 
 
-const dim = Int(70*30)
+const dim = Int(10)
 nthreads = 256 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
 nblocks = cld(dim, nthreads)
 
-x = CUDA.zeros(Float64, (6, dim)) * 1e-6; st::Int = 1; nturn::Int = 0; x
-# saved_arr = CUDA.zeros(Float64, (6, dim, length(acc.lattice)+1))
+
+x = CUDA.ones(Float64, (6, dim)) * 1e-6; st::Int = 1;
+x
+
+
+function testx(V)
+    i::Int = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i <= length(V)
+        #CUDA.@println(i)
+    end
+end
+
 CUDA.@time CUDA.@sync @cuda(
     threads = nthreads,
     blocks = nblocks,
-    # gpu_element_pass_kernel(elem, x, acc, st, nturn)
-    # gpu_pm_str_mpole_symplectic4_pass!(x, elem, acc, st)
-    # gpu_line_pass_kernel(acc, x, st, nturn)
-    # gpu_element_pass_kernel(elem, x, acc, st)
-    #test1(saved_arr, acc, x, st, nturn)
-    #test2(acc, x, st, nturn)
-    gpu_ring_pass_kernel(acc, x, nr_turns, st)
-); #xf[end], x[:,end]
+    testx(x) 
+);
 
-size(x)
-
-xf[end]
-x[:, end]
+CUDA.memory_status()
