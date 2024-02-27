@@ -459,7 +459,7 @@ acc
 p1 = Pos(1) * 1e-6
 nr_turns::Int = 1024
 typeof(p1)
-xf, _, _ = ring_pass(acc, p1, nr_turns)
+@time xf, _, _ = ring_pass(acc, p1, nr_turns)
 
 xf
 
@@ -486,26 +486,30 @@ function test1(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64,
 end
 
 
-const dim = Int(10)
+dim = 1000
 nthreads = 256 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
 nblocks = cld(dim, nthreads)
 
+orb = Pos(randn(6)) * 1e-7
 
-x = CUDA.ones(Float64, (6, dim)) * 1e-6; st::Int = 1;
-x
+p = copy(orb)
+p, _ = ring_pass(acc, p, 500)
+p[1]
 
+mat = zeros(Float64, (6, dim))
+mat .= orb[:]
+mat
+x = CuArray(mat)
 
-function testx(V)
-    i::Int = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    if i <= length(V)
-        #CUDA.@println(i)
-    end
-end
+st = -1
 
 CUDA.@time CUDA.@sync @cuda(
     threads = nthreads,
     blocks = nblocks,
-    testx(x) 
+    gpu_ring_pass_kernel(acc, x, 500, st)  
 );
+
+x
+p[1]
 
 CUDA.memory_status()
