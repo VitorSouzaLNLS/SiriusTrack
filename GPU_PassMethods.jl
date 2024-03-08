@@ -450,66 +450,68 @@ function gpu_ring_pass_kernel(accelerator::GPUAccelerator, V::CuDeviceArray{Floa
     return nothing
 end
 
+
+# preparation
+
 acc = create_accelerator()
 acc.radiation_state = 1
 acc.cavity_state = 1
 acc
 
-
-p1 = Pos(1) * 1e-6
-nr_turns::Int = 1024
-typeof(p1)
-@time xf, _, _ = ring_pass(acc, p1, nr_turns)
-
-xf
-
-function test1(saved_arr, accelerator::GPUAccelerator, V::CuDeviceArray{Float64, 2}, status::Int, turn_number::Int=0)
-    i::Int = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    @inbounds saved_arr[1, i, 1] = V[1, i]
-    @inbounds saved_arr[2, i, 1] = V[2, i]
-    @inbounds saved_arr[3, i, 1] = V[3, i]
-    @inbounds saved_arr[4, i, 1] = V[4, i]
-    @inbounds saved_arr[5, i, 1] = V[5, i]
-    @inbounds saved_arr[6, i, 1] = V[6, i]
-    o::Int = 2
-    for elem in accelerator.lattice
-        gpu_element_pass_kernel(elem, V, accelerator, status, turn_number)
-        @inbounds saved_arr[1, i, o] = V[1, i]
-        @inbounds saved_arr[2, i, o] = V[2, i]
-        @inbounds saved_arr[3, i, o] = V[3, i]
-        @inbounds saved_arr[4, i, o] = V[4, i]
-        @inbounds saved_arr[5, i, o] = V[5, i]
-        @inbounds saved_arr[6, i, o] = V[6, i]
-        o += 1
-    end
-    return nothing
-end
-
-
-dim = 1000
-nthreads = 256 #Int(floor(CUDA.attribute(device(), CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK) * 0.5))
+dim = 256 * 100
+nthreads = 256
 nblocks = cld(dim, nthreads)
 
-orb = Pos(randn(6)) * 1e-7
 
-p = copy(orb)
-p, _ = ring_pass(acc, p, 500)
-p[1]
+# line_pass
 
-mat = zeros(Float64, (6, dim))
-mat .= orb[:]
-mat
-x = CuArray(mat)
+# single run
+p1 = Pos(1) * 1e-6; line_pass(acc, p1, "end")
 
-st = -1
+# cpu benchmark
+p1 = Pos(1) * 1e-6; @benchmark line_pass($acc, $p1, "end")
 
-CUDA.@time CUDA.@sync @cuda(
+# single run
+particles = CUDA.fill(1e-6, (6, dim)); st = -1;CUDA.@time CUDA.@sync @cuda(
     threads = nthreads,
     blocks = nblocks,
-    gpu_ring_pass_kernel(acc, x, 500, st)  
+    gpu_line_pass_kernel(acc, particles, st)
 );
 
-x
-p[1]
+# gpu benchmark
+particles = CUDA.fill(1e-6, (6, dim)); st = -1; blp = @benchmarkable CUDA.@sync @cuda(
+    threads = $nthreads,
+    blocks = $nblocks,
+    gpu_line_pass_kernel($acc, $particles, $st)
+); run(blp, seconds = 30)
 
-CUDA.memory_status()
+
+# ring_pass
+
+nr_turns = 10
+
+# single run
+p = Pos(1e-6) ; ring_pass(acc, p, nr_turns)
+
+# cpu benchmark
+p = Pos(1e-6); @benchmark ring_pass($acc, $p, $nr_turns)
+
+# single run
+particles = CUDA.fill(1e-6, (6, dim)); st = -1; CUDA.@time CUDA.@sync @cuda(
+    threads = nthreads,
+    blocks = nblocks,
+    gpu_ring_pass_kernel(acc, particles, nr_turns, st)
+);
+
+
+# gpu benchmark
+particles = CUDA.fill(1e-6, (6, dim)); st = -1; brp = @benchmarkable CUDA.@sync @cuda(
+    threads = $nthreads,
+    blocks = $nblocks,
+    gpu_ring_pass_kernel($acc, $particles, 10, $st)
+); run(brp, seconds=1*50)
+
+
+1+1
+
+(48.022/dim) * 1e3 / 10 
